@@ -11,8 +11,30 @@
 #
 # cv2.imshow("img",img)
 # cv2.waitKey(0)
+import cv2
 import torch
 from torch import nn
+# img = cv2.imread("../Train_ir/1.bmp")
+# [h,w,_] = img.shape
+# print(h,w)
+# img = torch.from_numpy(img).unsqueeze(0).permute(0,3,1,2).float()
+# out = nn.Conv2d(3, 1, kernel_size=160, stride=60, padding=0, bias=False)
+# img = out(img)
+# print(img.shape)
+import numpy as np
+import h5py
+from torchvision import transforms
+from torchsummary import summary
+with h5py.File("../checkpoint/Train_ir/train.h5", 'r') as hf:
+    img = np.array(hf.get('data'))
+    label = np.array(hf.get('label'))
+print(img[0].shape)
+print(label[0].shape)
+label[0] = label[0].reshape(1, 152, 152)
+from model import U_GAN
+from model import Discriminator
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+D = Discriminator().to(device)
+trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
 
-a = torch.tensor([3,1,2,4,5,6,7,8,9,10,11,12,13,14,15,16],dtype=torch.int32)
-print(a.dtype)
+print(trans(label[0]).shape)
