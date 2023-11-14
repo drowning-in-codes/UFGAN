@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torchvision
 from pathlib import Path
-from main import FusionModel
+from model import FusionModel
 import cv2
 
 if __name__ == '__main__':
@@ -19,6 +19,6 @@ if __name__ == '__main__':
         input_img = torch.cat([torch.from_numpy(ir_img).unsqueeze(0).unsqueeze(0).to(device).float(),
                                torch.from_numpy(vi_img).unsqueeze(0).unsqueeze(0).to(device).float()], dim=1)
         output_img = model(input_img)
-        output_img = output_img.squeeze(0).squeeze(0).detach().numpy()
+        output_img = output_img.squeeze(0).squeeze(0).detach().cpu().numpy()
         output_img = output_img.astype("uint8")
         cv2.imwrite(f"./Test_result/{i}.bmp", output_img)
