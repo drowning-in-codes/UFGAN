@@ -12,26 +12,28 @@ import h5py
 import tqdm
 from skimage import metrics
 
+
 class DDcGAN(nn.Module):
     def __init__(self):
         super().__init__()
-        self.enc_layer_1 = self.conv_bn_lr(2, 2, 3, 1, 1)
-        self.enc_layer_2 = self.conv_bn_lr(32, 64, 3, 1, 1)
-        self.enc_layer_3 = self.conv_bn_lr(96, 128, 3, 1, 1)
-        self.enc_layer_4 = self.conv_bn_lr(128+96, 256, 3, 1, 1)
-        self.enc_layer_5 = self.conv_bn_lr(256+128+64+32, 512, 3, 1, 1)
+        self.enc_layer_1 = self.conv_bn_lr(2, 48, 3, 1, 1)
+        self.enc_layer_2 = self.conv_bn_lr(48, 48, 3, 1, 1)
+        self.enc_layer_3 = self.conv_bn_lr(96, 48, 3, 1, 1)
+        self.enc_layer_4 = self.conv_bn_lr(96+48, 48, 3, 1, 1)
+        self.enc_layer_5 = self.conv_bn_lr(96+48+48, 48, 3, 1, 1)
 
+        self.dec_layer_1 = self.conv_bn_lr(240,240,3, 1, 1)
+        self.dec_layer_2 = self.conv_bn_lr(240,128,3, 1, 1)
+        self.dec_layer_3 = self.conv_bn_lr(128,64,3, 1, 1)
+        self.dec_layer_4 = self.conv_bn_lr(64,32,3, 1, 1)
+        self.dec_layer_5 = self.conv_bn_lr(32,1,3,last=False)
 
-        self.dec_layer_1 = self.conv_bn_lr(1)
-
-
-    def forward(self,x):
+    def forward(self, x):
         fused_feature = self.encoder(x)
+        fused = self.decoder(fused_feature)
+        return fused
 
-
-
-
-    def encoder(self,x):
+    def encoder(self, x):
         layer_1 = self.enc_layer_1(x)
         layer_2 = self.enc_layer_2(layer_1)
         out = torch.cat([layer_1, layer_2], dim=1)
@@ -44,41 +46,17 @@ class DDcGAN(nn.Module):
         fused_feature_map = torch.cat([layer_1, layer_2, layer_3, layer_4, layer_5], dim=1)
         return fused_feature_map
 
+    def decoder(self, fused_feature):
+        dec_layer_1 = self.dec_layer_1(fused_feature)
+        dec_layer_2 = self.dec_layer_2(dec_layer_1)
+        dec_layer_3 = self.dec_layer_3(dec_layer_2)
+        dec_layer_4 = self.dec_layer_4(dec_layer_3)
+        dec_layer_5 = self.dec_layer_5(dec_layer_4)
+        return dec_layer_5
 
-    def decoder(self,fused_feature):
-        pass
-
-    def conv_bn_lr(self,in_channels,out_channels,kernel_size,stride,padding):
+    def conv_bn_lr(self, in_channels, out_channels, kernel_size, stride=1, padding=0,last=False):
         cbl = nn.Sequential(
-            nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU()
-        )
-        return cbl
-
-class FusionModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = self.conv_bn_lr(2, 256, 3, 1, 1)
-        self.conv2 = self.conv_bn_lr(256, 128, 3, 1, 1)
-        self.dropout = nn.Dropout(.2)
-        self.conv3 = self.conv_bn_lr(128, 64, 3, 1, 1)
-        self.conv4 = self.conv_bn_lr(64, 32, 3, 1, 1)
-        self.conv5 = self.conv_bn_lr(32, 1, 1, 0, 1,last=True)
-
-    def forward(self,x):
-        out = self.conv1(x)
-        out = self.conv2(out)
-        out = self.dropout(out)
-        out = self.conv3(out)
-        out = self.conv4(out)
-        out = self.dropout(out)
-        out = self.conv5(out)
-        return out
-
-    def conv_bn_lr(self,in_channels,out_channels,kernel_size,padding,stride,last=False):
-        cbl = nn.Sequential(
-            nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding),
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
             nn.BatchNorm2d(out_channels),
         )
         if last:
@@ -88,6 +66,36 @@ class FusionModel(nn.Module):
         return cbl
 
 
+class FusionModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = self.conv_bn_lr(2, 256, 3, 1, 1)
+        self.conv2 = self.conv_bn_lr(256, 128, 3, 1, 1)
+        self.dropout = nn.Dropout(.2)
+        self.conv3 = self.conv_bn_lr(128, 64, 3, 1, 1)
+        self.conv4 = self.conv_bn_lr(64, 32, 3, 1, 1)
+        self.conv5 = self.conv_bn_lr(32, 1, 1, 0, 1, last=True)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.dropout(out)
+        out = self.conv3(out)
+        out = self.conv4(out)
+        out = self.dropout(out)
+        out = self.conv5(out)
+        return out
+
+    def conv_bn_lr(self, in_channels, out_channels, kernel_size, padding, stride, last=False):
+        cbl = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+            nn.BatchNorm2d(out_channels),
+        )
+        if last:
+            cbl.append(nn.Tanh())
+        else:
+            cbl.append(nn.LeakyReLU())
+        return cbl
 
 
 class U_GAN(nn.Module):
@@ -106,7 +114,7 @@ class U_GAN(nn.Module):
         self.upsampling_3 = self.upsample(256)
         self.conv_bn_relu_8 = self.conv_bn_relu(256, 128, 3, 1, 0)
         self.upsampling_4 = self.upsample(128)
-        self.conv_bn_relu_9 = self.conv_bn_relu(128, 64, 3, 1, 0,last=True)
+        self.conv_bn_relu_9 = self.conv_bn_relu(128, 64, 3, 1, 0, last=True)
 
         self.conv = nn.Conv2d(64, 1, 1, 1, 0)
 
@@ -167,13 +175,13 @@ class U_GAN(nn.Module):
         out = self.upsampling_1(out)
         diffH = concat_4.shape[2] - out.shape[2]
         diffW = concat_4.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2,diffH // 2, diffH - diffH // 2], "constant",127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
         out = torch.cat([out, concat_4], dim=1)
         out = self.conv_bn_relu_6(out)
         out = self.upsampling_2(out)
         diffH = concat_3.shape[2] - out.shape[2]
         diffW = concat_3.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
         out = torch.cat([out, concat_3], dim=1)
         out = self.conv_bn_relu_7(out)
         out = self.upsampling_3(out)
@@ -185,7 +193,7 @@ class U_GAN(nn.Module):
         out = self.upsampling_4(out)
         diffH = concat_1.shape[2] - out.shape[2]
         diffW = concat_1.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
         out = torch.cat([out, concat_1], dim=1)
         out = self.conv_bn_relu_9(out)
         out = self.conv(out)
@@ -200,13 +208,74 @@ class Discriminator(nn.Module):
         self.conv_bn_lr_2 = self.conv_bn_lr(32, 64, 0, 2)
         self.conv_bn_lr_3 = self.conv_bn_lr(64, 128, 0, 2)
         self.conv_bn_lr_4 = self.conv_bn_lr(128, 256, 0, 2)
-
-        # self.liner = nn.Linear() For various input,use FCN or GAP or SSP instead
+        self.gfcn = self.gap_fcn(256)
+        # self.linear = nn.Linear() For various input,use FCN or GAP or SSP instead
         # 之前的网络训练时固定输入的大小,现在可以为任意大小,所以需要改为FCN或者GAP或者SSP
+        # SPPnet
+        # levels = [1, 2, 4]
+        # self.spp = self.SPPNet(levels=levels)
+        # features = sum(list(map(lambda x: x * x, levels)))
+        # self.linear = nn.Linear(256 * features, 1)
 
-        self.fcn = nn.Conv2d(256, 1, 1, 1, 0)
-    def SPPNet(self,x):
-        pass
+    """
+    https://blog.csdn.net/qq_43360533/article/details/107683520
+    """
+
+    # # 构建SPP层(空间金字塔池化层)
+    # class SPPLayer(torch.nn.Module):
+    #     def __init__(self, num_levels, pool_type='max_pool'):
+    #         super(SPPLayer, self).__init__()
+    #
+    #         self.num_levels = num_levels
+    #         self.pool_type = pool_type
+    #
+    #     def forward(self, x):
+    #         num, c, h, w = x.size()  # num:样本数量 c:通道数 h:高 w:宽
+    #         for i in range(self.num_levels):
+    #             level = i + 1
+    #             kernel_size = (math.ceil(h / level), math.ceil(w / level))
+    #             stride = (math.ceil(h / level), math.ceil(w / level))
+    #             pooling = (
+    #             math.floor((kernel_size[0] * level - h + 1) / 2), math.floor((kernel_size[1] * level - w + 1) / 2))
+    #
+    #             # 选择池化方式
+    #             if self.pool_type == 'max_pool':
+    #                 tensor = F.max_pool2d(x, kernel_size=kernel_size, stride=stride, padding=pooling).view(num, -1)
+    #             if self.pool_type == 'avg_pool':
+    #                 tensor = F.avg_pool2d(x, kernel_size=kernel_size, stride=stride, padding=pooling).view(num, -1)
+    #
+    #             # 展开、拼接
+    #             if (i == 0):
+    #                 SPP = tensor.view(num, -1)
+    #             else:
+    #                 SPP = torch.cat((SPP, tensor.view(num, -1)), 1)
+    #         return SPP
+
+    def SPPNet(self, x, levels=None):
+        if levels is None:
+            levels = [1, 2, 4]
+        SPP = torch.tensor([])
+        batch_size = x.size(0)
+        for idx, level in enumerate(levels):
+            spp = F.adaptive_max_pool2d(x, output_size=level)  # b,c,level,level
+            # kernel_size = (math.ceil(x.shape[2] / level), math.ceil(x.shape[3] / level))
+            # stride = (math.ceil(x.shape[2] / level), math.ceil(x.shape[3] / level))
+            # padding = (math.floor((kernel_size[0] * level - x.shape[2] + 1) / 2),math.floor((kernel_size[1] * level - x.shape[2] + 1) / 2))
+            # spp = F.max_pool2d(x,kernel_size=kernel_size,stride=stride,padding=padding)
+            if idx == 0:
+                SPP = spp.view(batch_size, -1)
+            else:
+                SPP = torch.cat((SPP, spp.view(batch_size, -1)), 1)
+        return SPP
+
+    def gap_fcn(self, channels):
+        # x = torch.nn.AdaptiveAvgPool2d((1, 1))(x)
+        gfcn = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Conv2d(channels, 1, 1, 1, 0)
+            # nn.Tanh()
+        )
+        return gfcn
 
     def conv_bn_lr(self, in_channels, out_channels, padding, stride):
         cbl = nn.Sequential(
@@ -221,6 +290,6 @@ class Discriminator(nn.Module):
         out = self.conv_bn_lr_2(out)
         out = self.conv_bn_lr_3(out)
         out = self.conv_bn_lr_4(out)
-        out = out.view(out.size(0), -1)
-        out = self.fcn(out)
+        out = self.gfcn(out)
+        # out = torch.tanh(out)
         return out

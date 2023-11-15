@@ -13,7 +13,8 @@ from tqdm import tqdm
 from model import U_GAN, Discriminator
 from logger import getLogger
 from torch.utils.tensorboard import SummaryWriter
-from loss import gradient_loss, l2_norm,mse_loss,ssim_loss
+from loss import gradient_loss, l2_norm, mse_loss, ssim_loss
+
 
 class imgDataset(Dataset):
     global args
@@ -29,7 +30,7 @@ class imgDataset(Dataset):
             self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
         if self.is_train:
             self.checkpoint_path = str(Path(args.checkpoint_dir) / path / "train.h5")
-            if Path(self.checkpoint_path).exists():
+            if not args.override_data and Path(self.checkpoint_path).exists():
                 mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
             else:
                 self.patch_img(path)
@@ -40,7 +41,7 @@ class imgDataset(Dataset):
         else:
             self.img_path = path
             self.checkpoint_path = Path(args.checkpoint_dir) / path / "test.h5"
-            if Path(self.checkpoint_path).exists():
+            if not args.override_data and Path(self.checkpoint_path).exists():
                 mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
             else:
                 mylogger.info(f"测试|制作测试集")
@@ -49,25 +50,16 @@ class imgDataset(Dataset):
                 total_img.extend(Path(path).glob("*.png"))
                 total_img.extend(Path(path).glob("*.tif"))
                 total_img.sort(key=lambda x: int(x.stem))
-                sub_img = []
-                sub_label = []
-                for index in range(len(total_img)):
-                    label = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE)
-                    padding = args.patch_size - args.label_size
-                    # 将源图像做填充
-                    img = np.pad(label,
-                                ((padding // 2, padding - padding // 2),(padding // 2, padding - padding // 2)),
-                                "constant",constant_values=(127,127))
-                    label = np.reshape(img, [img.shape[0], img.shape[1], 1])
-                    label = np.reshape(label, [label.shape[0], label.shape[1], 1])
+                self.patch_img(total_img)
+                patch_gen = self._patch(total_img)
+                pbar = tqdm(patch_gen)
+                for idx, patch_data in enumerate(pbar):
+                    pbar.set_description(f"测试|第{idx + 1}张图片做切分")
+                    sub_img, sub_label = patch_data
 
-                    sub_img.append(img)
-                    sub_label.append(label)
-                sub_img = np.array(sub_img)
-                sub_label = np.array(sub_label)
-                with h5py.File(self.checkpoint_path, "w") as hf:
-                    hf.create_dataset('data', data=sub_img)
-                    hf.create_dataset('label', data=sub_label)
+                    with h5py.File(str(self.checkpoint_path), "a") as hf:
+                        hf.create_dataset('data', data=sub_img)
+                        hf.create_dataset('label', data=sub_label)
 
             with h5py.File(self.checkpoint_path, 'r') as hf:
                 self.img = np.array(hf.get('data'))
@@ -94,30 +86,56 @@ class imgDataset(Dataset):
 
         total_img.sort(key=lambda x: int(x.stem))
 
-        self._patch(total_img)
+        patch_gen = self._patch(total_img)
+        pbar = tqdm(patch_gen)
+        for idx, patch_data in enumerate(pbar):
+            pbar.set_description(f"训练|第{idx + 1}张图片做切分")
+            sub_img, sub_label = patch_data
+
+            with h5py.File(str(self.checkpoint_path), "a") as hf:
+                hf.create_dataset('data', data=sub_img)
+                hf.create_dataset('label', data=sub_label)
 
     def _patch(self, total_img):
         sub_img = []
         sub_label = []
-        padding = (args.patch_size - args.label_size) // 2
-        for index in range(len(total_img)):
-            [h, w] = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE).shape
-            for x in range(0, h - args.patch_size, args.stride_size):
-                for y in range(0, w - args.patch_size, args.stride_size):
-                    patch_img = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE)  # 读取整张图像
-                    label = patch_img[x + padding:x + padding + args.label_size,
-                            y + padding:y + padding + args.label_size]
-                    label = label.reshape([args.label_size, args.label_size, 1])
-                    patch = patch_img[x:x + args.patch_size, y:y + args.patch_size]
-                    patch = patch.reshape([args.patch_size, args.patch_size, 1])
-                    sub_img.append(patch)
-                    sub_label.append(label)
-        sub_img = np.asarray(sub_img)
-        sub_label = np.asarray(sub_label)
+        if args.is_train:
+            padding = (args.patch_size - args.label_size) // 2
+            for index in range(len(total_img)):
+                [h, w] = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE).shape
+                for x in range(0, h - args.patch_size, args.stride_size):
+                    for y in range(0, w - args.patch_size, args.stride_size):
+                        patch_img = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE)  # 读取整张图像
+                        label = patch_img[x + padding:x + padding + args.label_size,
+                                y + padding:y + padding + args.label_size]
+                        label = label.reshape([args.label_size, args.label_size, 1])
+                        patch = patch_img[x:x + args.patch_size, y:y + args.patch_size]
+                        patch = patch.reshape([args.patch_size, args.patch_size, 1])
+                        sub_img.append(patch)
+                        sub_label.append(label)
+            sub_img = np.asarray(sub_img)
+            sub_label = np.asarray(sub_label)
+            yield sub_img, sub_label
+        else:
+            for index in range(len(total_img)):
+                label = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE)
+                padding = args.patch_size - args.label_size
+                # 将源图像做填充
+                img = np.pad(label, ((padding // 2, padding - padding // 2), (padding // 2, padding - padding // 2)),
+                             "constant", constant_values=(127, 127))
+                label = np.reshape(img, [img.shape[0], img.shape[1], 1])
+                label = np.reshape(label, [label.shape[0], label.shape[1], 1])
 
-        with h5py.File(str(self.checkpoint_path), "w") as hf:
-            hf.create_dataset('data', data=sub_img)
-            hf.create_dataset('label', data=sub_label)
+                sub_img.append(img)
+                sub_label.append(label)
+            sub_img = np.array(sub_img)
+            sub_label = np.array(sub_label)
+            yield sub_img, sub_label
+
+        #
+        # with h5py.File(str(self.checkpoint_path), "w") as hf:
+        #     hf.create_dataset('data', data=sub_img)
+        #     hf.create_dataset('label', data=sub_label)
 
 
 def gradient(x):
@@ -153,7 +171,7 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 #     torch.square(pos - torch.rand([batch_size, 1], device=device) * 0.5 + 0.7))
                 b = torch.rand([batch_size, 1], device=device) * 0.5 + 0.7
                 a = torch.rand([batch_size, 1], device=device) * 0.3
-                D_loss = mse_loss(D_out,a) + mse_loss(pos,b)
+                D_loss = mse_loss(D_out, a) + mse_loss(pos, b)
                 D_loss.backward()
                 epoch_D_loss.append(D_loss.item())
                 D_optimizer.step()
@@ -161,14 +179,15 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 if (batch + 1) % args.generator_interval == 0:
                     G_out = G(input_img)
                     D_out = D(G_out)
-                    G_content_loss = l2_norm(G_out, ir_label)/G_out.numel() + 5 * l2_norm(gradient(G_out), gradient(vi_label))/G_out.numel()
+                    G_content_loss = l2_norm(G_out, ir_label) / G_out.numel() + 5 * l2_norm(gradient(G_out), gradient(
+                        vi_label)) / G_out.numel()
                     # G_content_loss = torch.mean(
                     #     torch.square(G_out - ir_label)) + 5 * torch.mean(
                     #     torch.square(gradient(G_out) - gradient(vi_label)))
                     # G_adversarial_loss = torch.mean(
                     #     torch.square(D_out - torch.rand([batch_size, 1], device=device) * 0.5 + 0.7))
                     c = torch.rand([batch_size, 1], device=device) * 0.5 + 0.7
-                    G_adversarial_loss = mse_loss(D_out,c)
+                    G_adversarial_loss = mse_loss(D_out, c)
                     # 生成器损失
                     G_loss = G_adversarial_loss + 100 * G_content_loss
                     epoch_G_loss.append(G_loss.item())
@@ -199,12 +218,27 @@ def train(G, D, ir_dataloader, vi_dataloader):
                     G_out = G(input_img)
                     D_out = D(G_out)
                     pos = D(vi_label)
-                    D_loss = torch.mean(torch.square(D_out - torch.rand([args.batch_size, 1]) * 0.3)) + torch.mean(
-                        torch.square(pos - torch.rand([args.batch_size, 1]) * 0.5 + 0.7))
-                    G_content_loss = torch.mean(
-                        torch.square(G_out - ir_label) + 5 * torch.square(gradient(G_out) - gradient(vi_label)))
-                    G_adversarial_loss = torch.mean(torch.square(D_out - torch.rand([args.batch_size, 1]) * 0.5 + 0.7))
+                    batch_size = D_out.shape[0]
+                    b = torch.rand([batch_size, 1], device=device) * 0.5 + 0.7
+                    a = torch.rand([batch_size, 1], device=device) * 0.3
+                    D_loss = mse_loss(D_out, a) + mse_loss(pos, b)
+                    # D_loss = torch.mean(torch.square(D_out - torch.rand([args.batch_size, 1]) * 0.3)) + torch.mean(
+                    #     torch.square(pos - torch.rand([args.batch_size, 1]) * 0.5 + 0.7))
+                    # G_content_loss = torch.mean(
+                    #     torch.square(G_out - ir_label) + 5 * torch.square(gradient(G_out) - gradient(vi_label)))
+                    # G_adversarial_loss = torch.mean(torch.square(D_out - torch.rand([args.batch_size, 1]) * 0.5 + 0.7))
+                    # G_loss = G_adversarial_loss + 100 * G_content_loss
+
+                    # 生成器损失
+                    c = torch.rand([batch_size, 1], device=device) * 0.5 + 0.7
+                    G_adversarial_loss = mse_loss(D_out, c)
+                    G_content_loss = l2_norm(G_out, ir_label) / G_out.numel() + 5 * l2_norm(gradient(G_out), gradient(
+                        vi_label)) / G_out.numel()
+
+                    G_ssim_loss = ssim_loss(G_out, ir_label) + 5 * ssim_loss(G_out, vi_label)
+
                     G_loss = G_adversarial_loss + 100 * G_content_loss
+
                     epoch_G_loss.append(G_loss.item())
                     epoch_D_loss.append(D_loss.item())
                 if (epoch + 1) % args.log_interval == 0:
@@ -228,6 +262,7 @@ if __name__ == '__main__':
     parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
     parser.add_argument("--vis_log", "-vl", type=str, default="./log")
     parser.add_argument("--log_interval", "-li", type=int, default=5)
+    parser.add_argument("--override_data", "-od", type=bool, default=False, help="whether to override dataset")
     parser.add_argument("--generator_interval", "-gi", type=int, default=2, help="interval between update G")
     args = parser.parse_args()
     # 设置运行设备

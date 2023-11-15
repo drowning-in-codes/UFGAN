@@ -184,6 +184,7 @@ def img_sd(img):
 
 
 if __name__ == '__main__':
+    # Path("./figs").mkdir(parents=True, exist_ok=True)
     # img = Image.open("./Test_far/1.jpg")
     # print(np.array(img).shape)
     # plt.imshow(img,cmap="gray")

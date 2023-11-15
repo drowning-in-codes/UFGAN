@@ -23,5 +23,6 @@ def gradient(img, ):
 def gradient_loss(input, target):
     return torch.mean((gradient(input) - gradient(target)) ** 2)
 
+
 def l2_norm(input,target):
     return torch.sqrt(torch.sum((input - target) ** 2))

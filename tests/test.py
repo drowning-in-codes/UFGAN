@@ -43,11 +43,24 @@ from model import Discriminator
 import torch.nn.functional as F
 from torchsummary import summary
 
-label = np.array([[1,2,3],[4,5,6]])
+import torch.nn as nn
+from pathlib import Path
+path = "../Train_ir"
 
-img = np.pad(label,((3, 3),(3,3)),"constant",constant_values=(127,127))
+ir_img = list(Path(path).glob("*.bmp"))
+ir_img.extend(Path(path).glob("*.jpg"))
+ir_img.extend(Path(path).glob("*.png"))
+ir_img.extend(Path(path).glob("*.tif"))
+ir_img.sort(key=lambda x: int(x.stem))
+print(ir_img)
+
+vi_img = list(Path(path).glob("*.bmp"))
+vi_img.extend(Path(path).glob("*.jpg"))
+vi_img.extend(Path(path).glob("*.png"))
+vi_img.extend(Path(path).glob("*.tif"))
+vi_img.sort(key=lambda x: int(x.stem))
+print(vi_img)
 #
-# from model import U_GAN
 #
 #
 # img = cv2.imread("../Train_ir/1.bmp",cv2.IMREAD_GRAYSCALE)
