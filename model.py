@@ -15,12 +15,35 @@ import tqdm
 class FusionModel(nn.Module):
     def __init__(self):
         super().__init__()
-        pass
+        self.conv1 = self.conv_bn_lr(2, 256, 3, 1, 1)
+        self.conv2 = self.conv_bn_lr(256, 128, 3, 1, 1)
+        self.dropout = nn.Dropout(.2)
+        self.conv3 = self.conv_bn_lr(128, 64, 3, 1, 1)
+        self.conv4 = self.conv_bn_lr(64, 32, 3, 1, 1)
+        self.conv5 = self.conv_bn_lr(32, 1, 1, 0, 1,last=True)
+
+    def forward(self,x):
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.dropout(out)
+        out = self.conv3(out)
+        out = self.conv4(out)
+        out = self.dropout(out)
+        out = self.conv5(out)
+        return out
+
+    def conv_bn_lr(self,in_channels,out_channels,kernel_size,padding,stride,last=False):
+        cbl = nn.Sequential(
+            nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding),
+            nn.BatchNorm2d(out_channels),
+        )
+        if last:
+            cbl.append(nn.Tanh())
+        else:
+            cbl.append(nn.LeakyReLU())
+        return cbl
 
 
-
-    def forward(self):
-        pass
 
 class U_GAN(nn.Module):
     def __init__(self):
