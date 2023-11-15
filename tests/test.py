@@ -40,11 +40,12 @@ from model import Discriminator
 #
 # print(trans(label[0]).shape)
 #
-# from torchsummary import summary
-# # with h5py.File("../checkpoint/Train_ir/train.h5", 'r') as hf:
-# #     img = np.array(hf.get('data'))
-# #     label = np.array(hf.get('label'))
-# # print(len(img))
+import torch.nn.functional as F
+from torchsummary import summary
+
+label = np.array([[1,2,3],[4,5,6]])
+
+img = np.pad(label,((3, 3),(3,3)),"constant",constant_values=(127,127))
 #
 # from model import U_GAN
 #
@@ -56,16 +57,3 @@ from model import Discriminator
 # model = U_GAN()
 # summary(model,input_size=(2,1152,768),device="cpu")
 #
-import numpy as np
-from torch.utils.tensorboard import SummaryWriter
-
-writer = SummaryWriter(comment='test_tensorboard')
-
-for x in range(100):
-    writer.add_scalar('y=2x', x * 2, x)
-    writer.add_scalar('y=pow(2, x)', 2 ** x, x)
-
-    writer.add_scalars('data/scalar_group', {"xsinx": x * np.sin(x),
-                                             "xcosx": x * np.cos(x),
-                                             "arctanx": np.arctan(x)}, x)
-writer.close()

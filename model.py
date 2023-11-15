@@ -10,7 +10,51 @@ from torchvision import transforms
 import cv2
 import h5py
 import tqdm
+from skimage import metrics
 
+class DDcGAN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.enc_layer_1 = self.conv_bn_lr(2, 2, 3, 1, 1)
+        self.enc_layer_2 = self.conv_bn_lr(32, 64, 3, 1, 1)
+        self.enc_layer_3 = self.conv_bn_lr(96, 128, 3, 1, 1)
+        self.enc_layer_4 = self.conv_bn_lr(128+96, 256, 3, 1, 1)
+        self.enc_layer_5 = self.conv_bn_lr(256+128+64+32, 512, 3, 1, 1)
+
+
+        self.dec_layer_1 = self.conv_bn_lr(1)
+
+
+    def forward(self,x):
+        fused_feature = self.encoder(x)
+
+
+
+
+    def encoder(self,x):
+        layer_1 = self.enc_layer_1(x)
+        layer_2 = self.enc_layer_2(layer_1)
+        out = torch.cat([layer_1, layer_2], dim=1)
+        layer_3 = self.enc_layer_3(out)
+        out = torch.cat([layer_1, layer_2, layer_3], dim=1)
+        layer_4 = self.enc_layer_4(out)
+        out = torch.cat([layer_1, layer_2, layer_3, layer_4], dim=1)
+        layer_5 = self.enc_layer_5(out)
+
+        fused_feature_map = torch.cat([layer_1, layer_2, layer_3, layer_4, layer_5], dim=1)
+        return fused_feature_map
+
+
+    def decoder(self,fused_feature):
+        pass
+
+    def conv_bn_lr(self,in_channels,out_channels,kernel_size,stride,padding):
+        cbl = nn.Sequential(
+            nn.Conv2d(in_channels,out_channels,kernel_size,stride,padding),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU()
+        )
+        return cbl
 
 class FusionModel(nn.Module):
     def __init__(self):
@@ -46,8 +90,6 @@ class FusionModel(nn.Module):
 
 
 
-
-
 class U_GAN(nn.Module):
     def __init__(self):
         super(U_GAN, self).__init__()
@@ -64,20 +106,31 @@ class U_GAN(nn.Module):
         self.upsampling_3 = self.upsample(256)
         self.conv_bn_relu_8 = self.conv_bn_relu(256, 128, 3, 1, 0)
         self.upsampling_4 = self.upsample(128)
-        self.conv_bn_relu_9 = self.conv_bn_relu(128, 64, 3, 1, 0)
+        self.conv_bn_relu_9 = self.conv_bn_relu(128, 64, 3, 1, 0,last=True)
 
         self.conv = nn.Conv2d(64, 1, 1, 1, 0)
 
-    def conv_bn_relu(self, in_channels, out_channels, kernel_size, stride, padding):
-        cbr = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
-            nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(),
+    def conv_bn_relu(self, in_channels, out_channels, kernel_size, stride, padding, last=False):
+        if last:
+            cbr = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+                nn.BatchNorm2d(out_channels),
+                nn.Tanh(),
 
-            nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding),
-            nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU()
-        )
+                nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding),
+                nn.BatchNorm2d(out_channels),
+                nn.Tanh()
+            )
+        else:
+            cbr = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+                nn.BatchNorm2d(out_channels),
+                nn.LeakyReLU(),
+
+                nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding),
+                nn.BatchNorm2d(out_channels),
+                nn.LeakyReLU(),
+            )
         return cbr
 
     def downsample(self):
@@ -148,7 +201,12 @@ class Discriminator(nn.Module):
         self.conv_bn_lr_3 = self.conv_bn_lr(64, 128, 0, 2)
         self.conv_bn_lr_4 = self.conv_bn_lr(128, 256, 0, 2)
 
-        self.liner = nn.LazyLinear(1)
+        # self.liner = nn.Linear() For various input,use FCN or GAP or SSP instead
+        # 之前的网络训练时固定输入的大小,现在可以为任意大小,所以需要改为FCN或者GAP或者SSP
+
+        self.fcn = nn.Conv2d(256, 1, 1, 1, 0)
+    def SPPNet(self,x):
+        pass
 
     def conv_bn_lr(self, in_channels, out_channels, padding, stride):
         cbl = nn.Sequential(
@@ -164,5 +222,5 @@ class Discriminator(nn.Module):
         out = self.conv_bn_lr_3(out)
         out = self.conv_bn_lr_4(out)
         out = out.view(out.size(0), -1)
-        out = self.liner(out)
+        out = self.fcn(out)
         return out
