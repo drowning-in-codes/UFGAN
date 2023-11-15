@@ -9,11 +9,10 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 import cv2
 import h5py
-import tqdm
-from model import U_GAN
-from model import Discriminator
+from tqdm import tqdm
+from model import U_GAN,Discriminator
 from logger import getLogger
-
+from torch.utils.tensorboard import SummaryWriter
 
 class imgDataset(Dataset):
     global args
@@ -77,6 +76,8 @@ class imgDataset(Dataset):
     def __len__(self):
         return len(self.img)
 
+
+
     def __getitem__(self, idx):
         img = self.img[idx]
         label = self.label[idx]
@@ -85,17 +86,21 @@ class imgDataset(Dataset):
             label = self.trans(label)
         return img, label
 
+
+
     def patch_img(self, img_path):
         mylogger.info(f"训练|开始切分训练集")
+
         total_img = list(Path(img_path).glob("*.bmp"))
         total_img.extend(list(Path(img_path).glob("*.tif")))
         total_img.extend(list(Path(img_path).glob("*.jpg")))
         total_img.extend(list(Path(img_path).glob("*.png")))
 
         total_img.sort(key=lambda x: int(x.stem))
-        self._patch(total_img, img_path)
 
-    def _patch(self, total_img, path):
+        self._patch(total_img)
+
+    def _patch(self, total_img):
         sub_img = []
         sub_label = []
         padding = (args.patch_size - args.label_size) // 2
@@ -113,22 +118,26 @@ class imgDataset(Dataset):
                     sub_label.append(label)
         sub_img = np.asarray(sub_img)
         sub_label = np.asarray(sub_label)
-        with h5py.File(self.checkpoint_path, "w") as hf:
+
+        with h5py.File(str(self.checkpoint_path), "w") as hf:
             hf.create_dataset('data', data=sub_img)
             hf.create_dataset('label', data=sub_label)
 
 
-def gradient(input):
-    d = F.conv2d(input, torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], device=device).unsqueeze(0).unsqueeze(
+def gradient(x):
+    d = F.conv2d(x, torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], device=device).unsqueeze(0).unsqueeze(
         0).float())  # sobel算子
     return d
 
 
 def train(G, D, ir_dataloader, vi_dataloader):
+    global writer
+    epoch_G_loss = []
+    epoch_D_loss = []
     if args.is_train:
         G_optimizer = torch.optim.Adam(G.parameters())
         D_optimizer = torch.optim.Adam(D.parameters())
-        for epoch in range(args.epochs):
+        for epoch in tqdm(range(args.epochs)):
             mylogger.info(f"训练|开始训练第{epoch + 1}个epoch,一次epoch包含{len(ir_dataloader)}个batch")
             for batch, ((ir_img, ir_label), (vi_img, vi_label)) in enumerate(zip(ir_dataloader, vi_dataloader)):
                 ir_img = ir_img.to(device)
@@ -147,6 +156,7 @@ def train(G, D, ir_dataloader, vi_dataloader):
                     torch.square(D_out - torch.rand([batch_size, 1], device=device) * 0.3)) + torch.mean(
                     torch.square(pos - torch.rand([batch_size, 1], device=device) * 0.5 + 0.7))
                 D_loss.backward()
+                epoch_D_loss.append(D_loss)
                 D_optimizer.step()
                 D_optimizer.zero_grad()
                 if (batch + 1) % args.generator_interval == 0:
@@ -161,22 +171,30 @@ def train(G, D, ir_dataloader, vi_dataloader):
                         torch.square(D_out - torch.rand([batch_size, 1], device=device) * 0.5 + 0.7))
                     # 生成器损失
                     G_loss = G_adversarial_loss + 100 * G_content_loss
+                    epoch_G_loss.append(G_loss)
                     G_loss.backward()
                     G_optimizer.step()
                     G_optimizer.zero_grad()
                 else:
                     continue
             if (epoch + 1) % args.log_interval == 0:
-                mylogger.info(f"训练|第{epoch + 1}个epoch|G_loss:{G_loss:>5f}|D_loss:{D_loss:>5f}")
+                mean_G_loss = np.mean(epoch_G_loss)
+                mean_D_loss = np.mean(epoch_D_loss)
+                mylogger.info(f"训练|第{epoch + 1}个epoch|G_loss:{mean_G_loss:>5f}|D_loss:{mean_D_loss:>5f}")
+                writer.add_scalar("train/G_loss", mean_G_loss, epoch + 1)
+                writer.add_scalar("train/D_loss", mean_D_loss, epoch + 1)
+
                 torch.save(G.state_dict(), f"{args.checkpoint_dir}/G_{epoch + 1}.pth")
                 torch.save(D.state_dict(), f"{args.checkpoint_dir}/D_{epoch + 1}.pth")
     else:
         D.eval()
         G.eval()
+        epoch_G_loss = []
+        epoch_D_loss = []
         with torch.inference_mode():
-            for epoch in args.epochs:
+            for epoch in tqdm(args.epochs):
+                mylogger.info(f"测试|开始训练第{epoch + 1}个epoch")
                 for batch, (ir_img, ir_label, (vi_img, vi_label),) in enumerate(zip(ir_dataloader, vi_dataloader)):
-                    mylogger.info(f"测试|开始训练第{epoch + 1}个epoch")
                     input_img = torch.cat([ir_img, vi_img], dim=1)
                     G_out = G(input_img)
                     D_out = D(G_out)
@@ -187,9 +205,15 @@ def train(G, D, ir_dataloader, vi_dataloader):
                         torch.square(G_out - ir_label) + 5 * torch.square(gradient(G_out) - gradient(vi_label)))
                     G_adversarial_loss = torch.mean(torch.square(D_out - torch.rand([args.batch_size, 1]) * 0.5 + 0.7))
                     G_loss = G_adversarial_loss + 100 * G_content_loss
+                    epoch_G_loss.append(G_loss)
+                    epoch_D_loss.append(D_loss)
                 if (epoch + 1) % args.log_interval == 0:
-                    mylogger.info(f"测试|第{epoch + 1}个epoch|G_loss:{G_loss:>5f}|D_loss:{D_loss:>5f}")
-
+                    mean_G_loss = np.mean(epoch_G_loss)
+                    mean_D_loss = np.mean(epoch_D_loss)
+                    mylogger.info(f"测试|第{epoch + 1}个epoch|G_loss:{mean_G_loss:>5f}|D_loss:{mean_D_loss:>5f}")
+                    writer.add_scalar("test/G_loss", mean_G_loss, epoch + 1)
+                    writer.add_scalar("test/D_loss", mean_D_loss, epoch + 1)
+                    writer.add_image("test/output_img",G_out.unsqueeze(0).detach().cpu(), epoch + 1)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='FusionGAN for pytorch.')
@@ -200,11 +224,17 @@ if __name__ == '__main__':
     parser.add_argument("--stride_size", "-s", type=int, default=60)
     parser.add_argument("--epochs", "-e", type=int, default=30)
     parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint")
-    parser.add_argument("--log_dir", "-ld", type=str, default="./log")
+    parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
+    parser.add_argument("--vis_log", "-vl", type=str, default="./log")
     parser.add_argument("--log_interval", "-li", type=int, default=5)
     parser.add_argument("--generator_interval", "-gi", type=int, default=2, help="interval between update G")
     args = parser.parse_args()
+    # 设置运行设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # tensorboard可视化
+    Path(args.vis_log).mkdir(exist_ok=True)
+    writer = SummaryWriter(log_dir=args.vis_log)
+
     mylogger = getLogger("FusionGAN", log_dir=args.log_dir)
     ir_dataset = imgDataset(path="./Train_ir")
     vi_dataset = imgDataset(path="./Train_vi")

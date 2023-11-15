@@ -45,6 +45,9 @@ class FusionModel(nn.Module):
 
 
 
+
+
+
 class U_GAN(nn.Module):
     def __init__(self):
         super(U_GAN, self).__init__()
@@ -111,32 +114,26 @@ class U_GAN(nn.Module):
         out = self.upsampling_1(out)
         diffH = concat_4.shape[2] - out.shape[2]
         diffW = concat_4.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2,diffH // 2, diffH - diffH // 2], "constant",
-                    127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2,diffH // 2, diffH - diffH // 2], "constant",127)
         out = torch.cat([out, concat_4], dim=1)
         out = self.conv_bn_relu_6(out)
         out = self.upsampling_2(out)
         diffH = concat_3.shape[2] - out.shape[2]
         diffW = concat_3.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",
-                    127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",127)
         out = torch.cat([out, concat_3], dim=1)
         out = self.conv_bn_relu_7(out)
         out = self.upsampling_3(out)
         diffH = concat_2.shape[2] - out.shape[2]
         diffW = concat_2.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",
-                    127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
         out = torch.cat([out, concat_2], dim=1)
-
         out = self.conv_bn_relu_8(out)
         out = self.upsampling_4(out)
         diffH = concat_1.shape[2] - out.shape[2]
         diffW = concat_1.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",
-                    127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant",127)
         out = torch.cat([out, concat_1], dim=1)
-
         out = self.conv_bn_relu_9(out)
         out = self.conv(out)
         # print(f"U-net output shape:{out.shape}")
