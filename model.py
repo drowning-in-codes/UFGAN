@@ -11,7 +11,7 @@ import cv2
 import h5py
 import tqdm
 from skimage import metrics
-
+from torch.nn.utils.parametrizations import spectral_norm
 
 class DDcGAN(nn.Module):
     def __init__(self):
@@ -88,7 +88,7 @@ class FusionModel(nn.Module):
 
     def conv_bn_lr(self, in_channels, out_channels, kernel_size, padding, stride, last=False):
         cbl = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+            spectral_norm(nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)),
             nn.BatchNorm2d(out_channels),
         )
         if last:
@@ -133,21 +133,21 @@ class U_GAN(nn.Module):
     def conv_bn_relu(self, in_channels, out_channels, kernel_size, stride, padding, last=False):
         if last:
             cbr = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+                spectral_norm(nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)),
                 nn.BatchNorm2d(out_channels),
                 nn.Tanh(),
 
-                nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding),
+                spectral_norm(nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)),
                 nn.BatchNorm2d(out_channels),
                 nn.Tanh()
             )
         else:
             cbr = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+                spectral_norm(nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)),
                 nn.BatchNorm2d(out_channels),
                 nn.LeakyReLU(),
 
-                nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding),
+                spectral_norm(nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)),
                 nn.BatchNorm2d(out_channels),
                 nn.LeakyReLU(),
             )
@@ -161,7 +161,7 @@ class U_GAN(nn.Module):
 
     def upsample(self, channels):
         up = nn.Sequential(
-            nn.ConvTranspose2d(channels, channels // 2, 2, stride=2, padding=1),
+            spectral_norm(nn.ConvTranspose2d(channels, channels // 2, 2, stride=2, padding=1)),
             nn.BatchNorm2d(channels // 2),
             nn.LeakyReLU()
         )
@@ -314,7 +314,7 @@ class Discriminator(nn.Module):
 
     def conv_bn_lr(self, in_channels, out_channels, padding, stride):
         cbl = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 3, stride, padding),
+            spectral_norm(nn.Conv2d(in_channels, out_channels, 3, stride, padding)),
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU()
         )

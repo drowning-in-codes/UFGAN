@@ -23,32 +23,25 @@ from torch import nn
 # print(img.shape)
 import numpy as np
 import h5py
+from PIL import Image
+import imageio
+import matplotlib.pylab as plt
+import numpy as np
+import cv2
+print(("训练" if True else "测试") + f"|第张图片做切分")
+# # 新建numpy数组，注意np.zero()创建的数据类型为float64
 
-from torchvision import transforms
-from torchsummary import summary
-
-# with h5py.File("../checkpoint/Train_ir/train.h5", 'r') as hf:
-#     img = np.array(hf.get('data'))
-#     label = np.array(hf.get('label'))
-# print(type(img[0]))
-# print(label[0].shape)
-
-img_data = torch.randn([20,52,52,1])
-with h5py.File("./1.h5", "w") as hf:
-    hf.create_dataset("data", chunks=True, maxshape=(None,img_data.shape[1],img_data.shape[2],img_data.shape[3]), data=np.array(img_data))
-
-with h5py.File("./1.h5", "a") as hf:
-    img = hf["data"]
-    print(img.shape)
-    img.resize((img.shape[0] + 2,img_data.shape[1],img_data.shape[2],img_data.shape[3]))
-    img[20] = img_data[0]
-    img[21] = img_data[1]
-    print(img[21].shape)
-
+# plt.imshow(img,cmap="gray",vmin=0,vmax=255)
+# plt.show()
+# c = Image.fromarray(np.array(a))
+# c.show()
 # cv2.imshow("img",img[1000])
 # cv2.imshow("label",label[1000])
 # cv2.waitKey(0)
-
+# img = torch.ones(152,152,1,dtype=torch.uint8)*200
+# img = img.numpy()
+# plt.imshow(img,cmap="gray",vmin=0,vmax=255)
+# plt.show()
 # label[0] = label[0].reshape(1, 152, 152)
 from model import U_GAN
 from model import Discriminator

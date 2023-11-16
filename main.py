@@ -28,7 +28,7 @@ class imgDataset(Dataset):
 
     def __init__(self, is_train=True, transform=True, path="./Train_ir"):
         super(imgDataset, self).__init__()
-        self.checkpoint_path = None
+        self.data_dir = None
         self.is_train = is_train
         self.transform = transform
         (Path(args.data_dir) / path).mkdir(exist_ok=True)
@@ -36,19 +36,19 @@ class imgDataset(Dataset):
             if self.transform:
                 self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
             if self.is_train:
-                self.checkpoint_path = str(Path(args.data_dir) / path / "train.h5")
-                if not args.override_data and Path(self.checkpoint_path).exists():
+                self.data_dir = str(Path(args.data_dir) / path / "train.h5")
+                if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
                 else:
                     self.patch_img(path)
 
-                with h5py.File(self.checkpoint_path, 'r') as hf:
+                with h5py.File(self.data_dir, 'r') as hf:
                     self.img = np.array(hf.get('data'))
                     self.label = np.array(hf.get('label'))
             else:
                 self.img_path = path
-                self.checkpoint_path = str(Path(args.data_dir) / path / "test.h5")
-                if not args.override_data and Path(self.checkpoint_path).exists():
+                self.data_dir = str(Path(args.data_dir) / path / "test.h5")
+                if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
                 else:
                     total_img = list(Path(path).glob("*.bmp"))
@@ -63,7 +63,7 @@ class imgDataset(Dataset):
                         pbar.set_description(f"测试|第{idx + 1}张图片做切分")
                         sub_img, sub_label = patch_data
                         if idx == 0:
-                            with h5py.File(self.checkpoint_path, "w",chunks=True,maxshape=(None,)) as hf:
+                            with h5py.File(self.data_dir, "w",chunks=True,maxshape=(None,)) as hf:
                                 hf.create_dataset('data', data=sub_img,
                                                   maxshape=(None, sub_img.shape[1], sub_img.shape[2], sub_img.shape[3]),
                                                   chunks=True)
@@ -71,7 +71,7 @@ class imgDataset(Dataset):
                                 hf.create_dataset('label', data=sub_label,maxshape=(None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
                                                   chunks=True)
                         else:
-                            with h5py.File(self.checkpoint_path, "a") as hf:
+                            with h5py.File(self.data_dir, "a") as hf:
                                 img = hf.get("data")
                                 label = hf.get("label")
                                 img.resize(img.shape[0] + sub_img.shape[0], axis=0)
@@ -79,12 +79,15 @@ class imgDataset(Dataset):
                                 img[-sub_img.shape[0]:] = sub_img
                                 label[-sub_label.shape[0]:] = sub_label
 
-                with h5py.File(self.checkpoint_path, 'r') as hf:
+                with h5py.File(self.data_dir, 'r') as hf:
                     self.img = np.array(hf.get('data'))
                     self.label = np.array(hf.get('label'))
         else:
-            self.trans = transforms.Compose(
-                [transforms.ToTensor(), transforms.Resize(args.patch_size), transforms.Normalize([0.5], [0.5])])
+            self.img_trans = transforms.Compose(
+                [transforms.ToTensor(), transforms.Resize((args.patch_size,args.patch_size)), transforms.Normalize([0.5], [0.5])])
+            self.label_trans = transforms.Compose(
+                [transforms.ToTensor(), transforms.Resize((args.label_size, args.label_size)),
+                 transforms.Normalize([0.5], [0.5])])
             total_img = list(Path(path).glob("*.bmp"))
             total_img.extend(Path(path).glob("*.jpg"))
             total_img.extend(Path(path).glob("*.png"))
@@ -104,12 +107,12 @@ class imgDataset(Dataset):
                 label = self.trans(label)
             return img, label
         else:
-            padding = args.patch_size - args.label_size
+            # padding = args.patch_size - args.label_size
             label = cv2.imread(str(self.img[idx]), cv2.IMREAD_GRAYSCALE)
-            img = np.pad(label, ((padding // 2, padding - padding // 2), (padding // 2, padding - padding // 2)),
-                         "constant", constant_values=(0, 0))
-            label = self.trans(label)
-            img = self.trans(img)
+            # img = np.pad(label, ((padding // 2, padding - padding // 2), (padding // 2, padding - padding // 2)),
+            #              "constant", constant_values=(0, 0))
+            img = self.img_trans(label)
+            label = self.label_trans(label)
             return img, label
 
     def patch_img(self, img_path):
@@ -125,17 +128,17 @@ class imgDataset(Dataset):
         patch_gen = self._patch(total_img)
         pbar = tqdm(patch_gen)
         for idx, patch_data in enumerate(pbar):
-            pbar.set_description("训练" if args.is_train else "测试" +f"|第{idx + 1}张图片做切分")
+            pbar.set_description(("训练" if args.is_train else "测试") + f"|第{idx + 1}张图片做切分")
             sub_img, sub_label = patch_data
             if idx == 0:
                 """
                 先创建数据集
                 """
-                with h5py.File(self.checkpoint_path, "w") as hf:
+                with h5py.File(self.data_dir, "w") as hf:
                     hf.create_dataset('data', data=sub_img, maxshape=(None,sub_img.shape[1],sub_img.shape[2],sub_img.shape[3]),chunks=True)
                     hf.create_dataset('label', data=sub_label, maxshape=(None,sub_label.shape[1],sub_label.shape[2],sub_label.shape[3]),chunks=True)
             else:
-                with h5py.File(self.checkpoint_path, "a") as hf:
+                with h5py.File(self.data_dir, "a") as hf:
                     img = hf.get("data")
                     label = hf.get("label")
                     img.resize(img.shape[0]+sub_img.shape[0],axis=0)
@@ -249,8 +252,8 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 writer.add_scalar("train/G_loss", mean_G_loss, epoch + 1)
                 writer.add_scalar("train/D_loss", mean_D_loss, epoch + 1)
 
-                torch.save(G.state_dict(), f"{args.checkpoint_dir}/{G.__class__.name}/G_{epoch + 1}.pth")
-                torch.save(D.state_dict(), f"{args.checkpoint_dir}/{D.__class__.name}/D_{epoch + 1}.pth")
+                torch.save(G.state_dict(), f"{args.checkpoint_dir}/{G.__class__.__name__}/G_{epoch + 1}.pth")
+                torch.save(D.state_dict(), f"{args.checkpoint_dir}/{D.__class__.__name__}/D_{epoch + 1}.pth")
     else:
         D.eval()
         G.eval()
@@ -304,7 +307,7 @@ if __name__ == '__main__':
     parser.add_argument("--label_size", "-l", type=int, default=152)
     parser.add_argument("--stride_size", "-s", type=int, default=60)
     parser.add_argument("--epochs", "-e", type=int, default=30)
-    parser.add_argument("--do_patch", "-dp", type=bool, default=False)
+    parser.add_argument("--do_patch", "-dp", type=bool, default=True)
     parser.add_argument("--data_dir", "-d", type=str, default="./h5data",help="save path for h5 data")
     parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint",help="save path for torch model")
     parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
@@ -320,12 +323,15 @@ if __name__ == '__main__':
     Path(args.vis_log).mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=args.vis_log)
 
-    mylogger = getLogger("FusionGAN", log_dir=args.log_dir)
     ir_dataset = imgDataset(path="./Train_ir")
     vi_dataset = imgDataset(path="./Train_vi")
+    G = U_GAN().to(device)
+    D = Discriminator().to(device)
     ir_dataloader = DataLoader(ir_dataset, batch_size=args.batch_size, shuffle=True)
     vi_dataloader = DataLoader(vi_dataset, batch_size=args.batch_size, shuffle=True)
     assert len(ir_dataloader) == len(vi_dataloader), "红外图像和可见光图像数量不一致"
-    G = U_GAN().to(device)
-    D = Discriminator().to(device)
+    mylogger = getLogger(f"{G.__class__.__name__}", log_dir=args.log_dir)
+    # 模型保存文件夹创建
+    Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").mkdir(exist_ok=True,parents=True)
+    Path(args.checkpoint_dir).joinpath(f"{D.__class__.__name__}").mkdir(exist_ok=True,parents=True)
     train(G, D, ir_dataloader, vi_dataloader)

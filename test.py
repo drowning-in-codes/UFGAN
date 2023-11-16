@@ -2,14 +2,14 @@ import torch
 from torch import nn
 import torchvision
 from pathlib import Path
-from model import U_GAN
+from model import U_GAN,FusionModel,DDcGAN
 import cv2
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = U_GAN().to(device)
     Path("./Test_result").mkdir(exist_ok=True)
-    model.load_state_dict(torch.load("./checkpoint/G_30.pth"))
+    model.load_state_dict(torch.load(f"./checkpoint/{model.__class__.__name__}/G_30.pth"))
     ir_img = list(Path("./Test_ir").glob("*.bmp"))
     ir_img.extend(list(Path("./Test_ir").glob("*.tif")))
     ir_img.extend(list(Path("./Test_ir").glob("*.jpg")))
@@ -25,7 +25,10 @@ if __name__ == '__main__':
         input_img = torch.cat([torch.from_numpy(ir_ig).unsqueeze(0).unsqueeze(0).to(device).float(),
                                torch.from_numpy(vi_ig).unsqueeze(0).unsqueeze(0).to(device).float()], dim=1)
         output_img = model(input_img.to(device))
-        output_img = output_img.squeeze(0).squeeze(0).detach().cpu().numpy()
+        output_img = output_img.squeeze(0).detach().cpu().numpy()
+        # output_img = (output_img + 1)/2
+        # output_img = output_img.transpose(1,2,0)
+        output_img = output_img*127.5+127.5
         output_img = output_img.astype("uint8")
         cv2.imwrite(f"./Test_result/{ir_img[i].name}", output_img)
         print(f"第{i+1}张图片已经完成")
