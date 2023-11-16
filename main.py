@@ -63,10 +63,22 @@ class imgDataset(Dataset):
                     for idx, patch_data in enumerate(pbar):
                         pbar.set_description(f"测试|第{idx + 1}张图片做切分")
                         sub_img, sub_label = patch_data
+                        if idx == 0:
+                            with h5py.File(str(self.checkpoint_path), "w",chunks=True,maxshape=(None,)) as hf:
+                                hf.create_dataset('data', data=sub_img,
+                                                  maxshape=(None, sub_img.shape[1], sub_img.shape[2], sub_img.shape[3]),
+                                                  chunks=True)
 
-                        with h5py.File(str(self.checkpoint_path), "a") as hf:
-                            hf.create_dataset('data', data=sub_img)
-                            hf.create_dataset('label', data=sub_label)
+                                hf.create_dataset('label', data=sub_label,maxshape=(None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
+                                                  chunks=True)
+                        else:
+                            with h5py.File(str(self.checkpoint_path), "a") as hf:
+                                img = hf.get("data")
+                                label = hf.get("label")
+                                img.resize(img.shape[0] + sub_img.shape[0], axis=0)
+                                label.resize(label.shape[0] + sub_label.shape[0], axis=0)
+                                img[-sub_img.shape[0]:] = sub_img
+                                label[-sub_label.shape[0]:] = sub_label
 
                 with h5py.File(self.checkpoint_path, 'r') as hf:
                     self.img = np.array(hf.get('data'))
@@ -95,10 +107,11 @@ class imgDataset(Dataset):
         else:
             padding = args.patch_size - args.label_size
             label = cv2.imread(str(self.img[idx]), cv2.IMREAD_GRAYSCALE)
-            img = np.pad(label,((padding//2,padding-padding//2),(padding//2,padding-padding//2)),"constant",constant_values=(0,0))
+            img = np.pad(label, ((padding // 2, padding - padding // 2), (padding // 2, padding - padding // 2)),
+                         "constant", constant_values=(0, 0))
             label = self.trans(label)
             img = self.trans(img)
-            return img,label
+            return img, label
 
     def patch_img(self, img_path):
         mylogger.info(f"训练|开始切分训练集")
@@ -120,25 +133,24 @@ class imgDataset(Dataset):
                 先创建数据集
                 """
                 with h5py.File(str(self.checkpoint_path), "w") as hf:
-                    hf.create_dataset('data', data=sub_img)
-                    hf.create_dataset('label', data=sub_label)
+                    hf.create_dataset('data', data=sub_img, maxshape=(None,sub_img.shape[1],sub_img.shape[2],sub_img.shape[3]),chunks=True)
+                    hf.create_dataset('label', data=sub_label, maxshape=(None,sub_label.shape[1],sub_label.shape[2],sub_label.shape[3]),chunks=True)
             else:
                 with h5py.File(str(self.checkpoint_path), "a") as hf:
                     img = hf.get("data")
                     label = hf.get("label")
-                    img.resize((img.shape[0] + sub_img.shape[0], sub_img.shape[1], sub_img.shape[2]))
-                    label.resize((label.shape[0] + sub_label.shape[0], sub_label.shape[1], sub_label.shape[2]))
+                    img.resize(img.shape[0]+sub_img.shape[0],axis=0)
+                    label.resize(label.shape[0]+sub_label.shape[0],axis=0)
                     img[-sub_img.shape[0]:] = sub_img
                     label[-sub_label.shape[0]:] = sub_label
 
-
     @staticmethod
     def _patch(total_img):
-        # sub_img = []
-        # sub_label = []
         if args.is_train:
             padding = (args.patch_size - args.label_size) // 2
             for index in range(len(total_img)):
+                sub_img = []
+                sub_label = []
                 [h, w] = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE).shape
                 for x in range(0, h - args.patch_size, args.stride_size):
                     for y in range(0, w - args.patch_size, args.stride_size):
@@ -148,13 +160,16 @@ class imgDataset(Dataset):
                         label = label.reshape([args.label_size, args.label_size, 1])
                         patch = patch_img[x:x + args.patch_size, y:y + args.patch_size]
                         patch = patch.reshape([args.patch_size, args.patch_size, 1])
-                        # sub_img.append(patch)
-                        # sub_label.append(label)
-                        yield patch, label
-            # yield sub_img, sub_label
+                        sub_img.append(patch)
+                        sub_label.append(label)
+                        # yield patch, label
+                sub_img = np.array(sub_img)
+                sub_label = np.array(sub_label)
+                yield sub_img, sub_label
         else:
             for index in range(len(total_img)):
                 label = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE)
+                label.resize([args.patch_size, args.patch_size])
                 padding = args.patch_size - args.label_size
                 # 将源图像做填充
                 img = np.pad(label,
@@ -166,7 +181,7 @@ class imgDataset(Dataset):
                 # sub_label.append(label)
                 # sub_img = np.array(sub_img)
                 # sub_label = np.array(sub_label)
-                yield img, label
+                yield [img], [label]
             # yield sub_img, sub_label
 
 

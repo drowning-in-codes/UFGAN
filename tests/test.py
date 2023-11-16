@@ -26,13 +26,25 @@ import h5py
 
 from torchvision import transforms
 from torchsummary import summary
+
 # with h5py.File("../checkpoint/Train_ir/train.h5", 'r') as hf:
 #     img = np.array(hf.get('data'))
 #     label = np.array(hf.get('label'))
 # print(type(img[0]))
 # print(label[0].shape)
-img = cv2.imread("../Train_ir/00000.png",cv2.IMREAD_GRAYSCALE)
-print(type(img))
+
+img_data = torch.randn([20,52,52,1])
+with h5py.File("./1.h5", "w") as hf:
+    hf.create_dataset("data", chunks=True, maxshape=(None,img_data.shape[1],img_data.shape[2],img_data.shape[3]), data=np.array(img_data))
+
+with h5py.File("./1.h5", "a") as hf:
+    img = hf["data"]
+    print(img.shape)
+    img.resize((img.shape[0] + 2,img_data.shape[1],img_data.shape[2],img_data.shape[3]))
+    img[20] = img_data[0]
+    img[21] = img_data[1]
+    print(img[21].shape)
+
 # cv2.imshow("img",img[1000])
 # cv2.imshow("label",label[1000])
 # cv2.waitKey(0)
