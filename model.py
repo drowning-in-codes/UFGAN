@@ -279,8 +279,6 @@ class Discriminator(nn.Module):
     #         return SPP
 
 
-
-
     def weight_init(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
@@ -309,12 +307,13 @@ class Discriminator(nn.Module):
         return SPP
 
     def gap_fcn(self, channels):
-        # x = torch.nn.AdaptiveAvgPool2d((1, 1))(x)
         gfcn = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),
+            # nn.AdaptiveAvgPool2d((1, 1)),
+            nn.AdaptiveMaxPool2d((1, 1)),
             nn.Conv2d(channels, 1, 1, 1, 0)
             # nn.Tanh()
         )
+        # x = torch.nn.AdaptiveAvgPool2d((1, 1))(x)
         return gfcn
 
     def conv_bn_lr(self, in_channels, out_channels, padding, stride):

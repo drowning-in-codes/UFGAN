@@ -115,10 +115,22 @@ class imgDataset(Dataset):
         for idx, patch_data in enumerate(pbar):
             pbar.set_description(f"训练|第{idx + 1}张图片做切分")
             sub_img, sub_label = patch_data
+            if idx == 0:
+                """
+                先创建数据集
+                """
+                with h5py.File(str(self.checkpoint_path), "w") as hf:
+                    hf.create_dataset('data', data=sub_img)
+                    hf.create_dataset('label', data=sub_label)
+            else:
+                with h5py.File(str(self.checkpoint_path), "a") as hf:
+                    img = hf.get("data")
+                    label = hf.get("label")
+                    img.resize((img.shape[0] + sub_img.shape[0], sub_img.shape[1], sub_img.shape[2]))
+                    label.resize((label.shape[0] + sub_label.shape[0], sub_label.shape[1], sub_label.shape[2]))
+                    img[-sub_img.shape[0]:] = sub_img
+                    label[-sub_label.shape[0]:] = sub_label
 
-            with h5py.File(str(self.checkpoint_path), "a") as hf:
-                hf.create_dataset('data', data=sub_img)
-                hf.create_dataset('label', data=sub_label)
 
     @staticmethod
     def _patch(total_img):
@@ -150,7 +162,6 @@ class imgDataset(Dataset):
                              "constant", constant_values=(127, 127))
                 img = np.reshape(img, [img.shape[0], img.shape[1], 1])
                 label = np.reshape(label, [label.shape[0], label.shape[1], 1])
-
                 # sub_img.append(img)
                 # sub_label.append(label)
                 # sub_img = np.array(sub_img)

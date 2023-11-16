@@ -29,8 +29,10 @@ from torchsummary import summary
 # with h5py.File("../checkpoint/Train_ir/train.h5", 'r') as hf:
 #     img = np.array(hf.get('data'))
 #     label = np.array(hf.get('label'))
-# print(img[0].shape)
+# print(type(img[0]))
 # print(label[0].shape)
+img = cv2.imread("../Train_ir/00000.png",cv2.IMREAD_GRAYSCALE)
+print(type(img))
 # cv2.imshow("img",img[1000])
 # cv2.imshow("label",label[1000])
 # cv2.waitKey(0)
