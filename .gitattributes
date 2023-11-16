@@ -3,3 +3,5 @@ Train_vi/ filter=lfs diff=lfs merge=lfs -text
 Test_ir/ filter=lfs diff=lfs merge=lfs -text
 Test_vi/ filter=lfs diff=lfs merge=lfs -text
 checkpoint/* filter=lfs diff=lfs merge=lfs -text
+checkpoint/G_30.pth filter=lfs diff=lfs merge=lfs -text
+checkpoint/G_30.pth filter=lfs diff=lfs merge=lfs -text

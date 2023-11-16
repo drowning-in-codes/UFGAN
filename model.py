@@ -97,6 +97,21 @@ class FusionModel(nn.Module):
             cbl.append(nn.LeakyReLU())
         return cbl
 
+    def weight_init(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+            nn.init.kaiming_normal_(m.weight.data)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight.data, 1.0)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m,nn.ReLU):
+            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in',nonlinearity='leaky_relu')
+        elif isinstance(m, nn.LeakyReLU):
+            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
+        elif isinstance(m,nn.Tanh):
+            nn.init.xavier_normal_(m.weight.data)
 
 class U_GAN(nn.Module):
     def __init__(self):
@@ -160,11 +175,17 @@ class U_GAN(nn.Module):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
             nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+            nn.init.kaiming_normal_(m.weight.data)
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
-            nn.init.kaiming_normal_(m.weight.data)
+        elif isinstance(m,nn.ReLU):
+            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in',nonlinearity='leaky_relu')
+        elif isinstance(m, nn.LeakyReLU):
+            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
+        elif isinstance(m,nn.Tanh):
+            nn.init.xavier_normal_(m.weight.data)
 
     def forward(self, x):
         out = self.conv_bn_relu_1(x)
@@ -261,6 +282,23 @@ class Discriminator(nn.Module):
     #             else:
     #                 SPP = torch.cat((SPP, tensor.view(num, -1)), 1)
     #         return SPP
+
+
+    def weight_init(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+            nn.init.kaiming_normal_(m.weight.data)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight.data, 1.0)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m,nn.ReLU):
+            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in',nonlinearity='leaky_relu')
+        elif isinstance(m, nn.LeakyReLU):
+            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
+        elif isinstance(m,nn.Tanh):
+            nn.init.xavier_normal_(m.weight.data)
 
     def SPPNet(self, x, levels=None):
         if levels is None:
