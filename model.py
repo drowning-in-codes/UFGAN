@@ -19,14 +19,14 @@ class DDcGAN(nn.Module):
         self.enc_layer_1 = self.conv_bn_lr(2, 48, 3, 1, 1)
         self.enc_layer_2 = self.conv_bn_lr(48, 48, 3, 1, 1)
         self.enc_layer_3 = self.conv_bn_lr(96, 48, 3, 1, 1)
-        self.enc_layer_4 = self.conv_bn_lr(96+48, 48, 3, 1, 1)
-        self.enc_layer_5 = self.conv_bn_lr(96+48+48, 48, 3, 1, 1)
+        self.enc_layer_4 = self.conv_bn_lr(96 + 48, 48, 3, 1, 1)
+        self.enc_layer_5 = self.conv_bn_lr(96 + 48 + 48, 48, 3, 1, 1)
 
-        self.dec_layer_1 = self.conv_bn_lr(240,240,3, 1, 1)
-        self.dec_layer_2 = self.conv_bn_lr(240,128,3, 1, 1)
-        self.dec_layer_3 = self.conv_bn_lr(128,64,3, 1, 1)
-        self.dec_layer_4 = self.conv_bn_lr(64,32,3, 1, 1)
-        self.dec_layer_5 = self.conv_bn_lr(32,1,3,last=False)
+        self.dec_layer_1 = self.conv_bn_lr(240, 240, 3, 1, 1)
+        self.dec_layer_2 = self.conv_bn_lr(240, 128, 3, 1, 1)
+        self.dec_layer_3 = self.conv_bn_lr(128, 64, 3, 1, 1)
+        self.dec_layer_4 = self.conv_bn_lr(64, 32, 3, 1, 1)
+        self.dec_layer_5 = self.conv_bn_lr(32, 1, 3, last=False)
 
     def forward(self, x):
         fused_feature = self.encoder(x)
@@ -54,7 +54,7 @@ class DDcGAN(nn.Module):
         dec_layer_5 = self.dec_layer_5(dec_layer_4)
         return dec_layer_5
 
-    def conv_bn_lr(self, in_channels, out_channels, kernel_size, stride=1, padding=0,last=False):
+    def conv_bn_lr(self, in_channels, out_channels, kernel_size, stride=1, padding=0, last=False):
         cbl = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
             nn.BatchNorm2d(out_channels),
@@ -117,6 +117,7 @@ class U_GAN(nn.Module):
         self.conv_bn_relu_9 = self.conv_bn_relu(128, 64, 3, 1, 0, last=True)
 
         self.conv = nn.Conv2d(64, 1, 1, 1, 0)
+        self.apply(self.weight_init)
 
     def conv_bn_relu(self, in_channels, out_channels, kernel_size, stride, padding, last=False):
         if last:
@@ -155,6 +156,16 @@ class U_GAN(nn.Module):
         )
         return up
 
+    def weight_init(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight.data, 1.0)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+            nn.init.kaiming_normal_(m.weight.data)
+
     def forward(self, x):
         out = self.conv_bn_relu_1(x)
         concat_1 = out
@@ -175,25 +186,25 @@ class U_GAN(nn.Module):
         out = self.upsampling_1(out)
         diffH = concat_4.shape[2] - out.shape[2]
         diffW = concat_4.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 0)
         out = torch.cat([out, concat_4], dim=1)
         out = self.conv_bn_relu_6(out)
         out = self.upsampling_2(out)
         diffH = concat_3.shape[2] - out.shape[2]
         diffW = concat_3.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 0)
         out = torch.cat([out, concat_3], dim=1)
         out = self.conv_bn_relu_7(out)
         out = self.upsampling_3(out)
         diffH = concat_2.shape[2] - out.shape[2]
         diffW = concat_2.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 0)
         out = torch.cat([out, concat_2], dim=1)
         out = self.conv_bn_relu_8(out)
         out = self.upsampling_4(out)
         diffH = concat_1.shape[2] - out.shape[2]
         diffW = concat_1.shape[3] - out.shape[3]
-        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 127)
+        out = F.pad(out, [diffW // 2, diffW - diffW // 2, diffH // 2, diffH - diffH // 2], "constant", 0)
         out = torch.cat([out, concat_1], dim=1)
         out = self.conv_bn_relu_9(out)
         out = self.conv(out)
