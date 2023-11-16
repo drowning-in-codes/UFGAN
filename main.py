@@ -10,7 +10,7 @@ from torchvision import transforms
 import cv2
 import h5py
 from tqdm import tqdm
-from model import U_GAN, Discriminator
+from model import U_GAN, Discriminator,FusionModel
 from logger import getLogger
 from torch.utils.tensorboard import SummaryWriter
 from loss import gradient_loss, l2_norm, mse_loss, ssim_loss
@@ -51,7 +51,6 @@ class imgDataset(Dataset):
                 if not args.override_data and Path(self.checkpoint_path).exists():
                     mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
                 else:
-                    mylogger.info(f"测试|制作测试集")
                     total_img = list(Path(path).glob("*.bmp"))
                     total_img.extend(Path(path).glob("*.jpg"))
                     total_img.extend(Path(path).glob("*.png"))
@@ -114,7 +113,7 @@ class imgDataset(Dataset):
             return img, label
 
     def patch_img(self, img_path):
-        mylogger.info(f"训练|开始切分训练集")
+        mylogger.info(f"训练|开始切分训练集" if args.is_train else f"测试|开始切分测试集")
 
         total_img = list(Path(img_path).glob("*.bmp"))
         total_img.extend(list(Path(img_path).glob("*.tif")))
@@ -126,7 +125,7 @@ class imgDataset(Dataset):
         patch_gen = self._patch(total_img)
         pbar = tqdm(patch_gen)
         for idx, patch_data in enumerate(pbar):
-            pbar.set_description(f"训练|第{idx + 1}张图片做切分")
+            pbar.set_description("训练" if args.is_train else "测试" +f"|第{idx + 1}张图片做切分")
             sub_img, sub_label = patch_data
             if idx == 0:
                 """
