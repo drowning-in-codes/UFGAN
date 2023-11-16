@@ -68,26 +68,23 @@ class DDcGAN(nn.Module):
 
 
 class FusionModel(nn.Module):
-    def __init__(self):
+    def __init__(self, original=False):
         super().__init__()
-        self.conv1 = self.conv_bn_lr(2, 256, 3, 1, 1)
-        self.conv2 = self.conv_bn_lr(256, 128, 3, 1, 1)
-        self.dropout = nn.Dropout(.2)
-        self.conv3 = self.conv_bn_lr(128, 64, 3, 1, 1)
-        self.conv4 = self.conv_bn_lr(64, 32, 3, 1, 1)
-        self.conv5 = self.conv_bn_lr(32, 1, 1, 0, 1, last=True)
+        channel = 256
+        self.conv = nn.ModuleList(
+            [self.conv_bn_lr(in_channel, out_channel, 5 if original else 3, 0 if original else 1, 1, last=True if out_channel == 1 else False) for
+             in_channel, out_channel in
+             zip((2, channel, channel // 2, channel // 4, channel // 8),
+                 (channel, channel // 2, channel // 4, channel // 8, 1))])
+        self.dropout = nn.Dropout2d(.2)
         self.apply(self.weight_init)
 
-
     def forward(self, x):
-        out = self.conv1(x)
-        out = self.conv2(out)
-        out = self.dropout(out)
-        out = self.conv3(out)
-        out = self.conv4(out)
-        out = self.dropout(out)
-        out = self.conv5(out)
-        return out
+        for i,conv in enumerate(self.conv):
+            x = conv(x)
+            if i % 2 == 0:
+                x = self.dropout(x)
+        return x
 
     def conv_bn_lr(self, in_channels, out_channels, kernel_size, padding, stride, last=False):
         cbl = nn.Sequential(
@@ -100,16 +97,16 @@ class FusionModel(nn.Module):
             cbl.append(nn.LeakyReLU())
         return cbl
 
-
     def weight_init(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+        elif isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
             nn.init.kaiming_normal_(m.weight.data)
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
             nn.init.constant_(m.bias.data, 0.0)
+
 
 
 class U_GAN(nn.Module):
@@ -174,7 +171,7 @@ class U_GAN(nn.Module):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+        elif isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
             nn.init.kaiming_normal_(m.weight.data)
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
@@ -278,12 +275,11 @@ class Discriminator(nn.Module):
     #                 SPP = torch.cat((SPP, tensor.view(num, -1)), 1)
     #         return SPP
 
-
     def weight_init(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m, (nn.Conv2d,nn.ConvTranspose2d)):
+        elif isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
             nn.init.kaiming_normal_(m.weight.data)
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
