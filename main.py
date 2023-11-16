@@ -16,6 +16,12 @@ from torch.utils.tensorboard import SummaryWriter
 from loss import gradient_loss, l2_norm, mse_loss, ssim_loss
 
 
+#
+# with h5py.File(str(self.checkpoint_path), "w") as hf:
+#     hf.create_dataset('data', data=sub_img)
+#     hf.create_dataset('label', data=sub_label)
+
+
 class imgDataset(Dataset):
     global args
     global mylogger
@@ -26,55 +32,73 @@ class imgDataset(Dataset):
         self.is_train = is_train
         self.transform = transform
         (Path(args.checkpoint_dir) / path).mkdir(exist_ok=True)
-        if self.transform:
-            self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
-        if self.is_train:
-            self.checkpoint_path = str(Path(args.checkpoint_dir) / path / "train.h5")
-            if not args.override_data and Path(self.checkpoint_path).exists():
-                mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
-            else:
-                self.patch_img(path)
+        if args.do_patch:
+            if self.transform:
+                self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
+            if self.is_train:
+                self.checkpoint_path = str(Path(args.checkpoint_dir) / path / "train.h5")
+                if not args.override_data and Path(self.checkpoint_path).exists():
+                    mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
+                else:
+                    self.patch_img(path)
 
-            with h5py.File(self.checkpoint_path, 'r') as hf:
-                self.img = np.array(hf.get('data'))
-                self.label = np.array(hf.get('label'))
+                with h5py.File(self.checkpoint_path, 'r') as hf:
+                    self.img = np.array(hf.get('data'))
+                    self.label = np.array(hf.get('label'))
+            else:
+                self.img_path = path
+                self.checkpoint_path = Path(args.checkpoint_dir) / path / "test.h5"
+                if not args.override_data and Path(self.checkpoint_path).exists():
+                    mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
+                else:
+                    mylogger.info(f"测试|制作测试集")
+                    total_img = list(Path(path).glob("*.bmp"))
+                    total_img.extend(Path(path).glob("*.jpg"))
+                    total_img.extend(Path(path).glob("*.png"))
+                    total_img.extend(Path(path).glob("*.tif"))
+                    total_img.sort(key=lambda x: int(x.stem))
+                    self.patch_img(total_img)
+                    patch_gen = self._patch(total_img)
+                    pbar = tqdm(patch_gen)
+                    for idx, patch_data in enumerate(pbar):
+                        pbar.set_description(f"测试|第{idx + 1}张图片做切分")
+                        sub_img, sub_label = patch_data
+
+                        with h5py.File(str(self.checkpoint_path), "a") as hf:
+                            hf.create_dataset('data', data=sub_img)
+                            hf.create_dataset('label', data=sub_label)
+
+                with h5py.File(self.checkpoint_path, 'r') as hf:
+                    self.img = np.array(hf.get('data'))
+                    self.label = np.array(hf.get('label'))
         else:
-            self.img_path = path
-            self.checkpoint_path = Path(args.checkpoint_dir) / path / "test.h5"
-            if not args.override_data and Path(self.checkpoint_path).exists():
-                mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
-            else:
-                mylogger.info(f"测试|制作测试集")
-                total_img = list(Path(path).glob("*.bmp"))
-                total_img.extend(Path(path).glob("*.jpg"))
-                total_img.extend(Path(path).glob("*.png"))
-                total_img.extend(Path(path).glob("*.tif"))
-                total_img.sort(key=lambda x: int(x.stem))
-                self.patch_img(total_img)
-                patch_gen = self._patch(total_img)
-                pbar = tqdm(patch_gen)
-                for idx, patch_data in enumerate(pbar):
-                    pbar.set_description(f"测试|第{idx + 1}张图片做切分")
-                    sub_img, sub_label = patch_data
-
-                    with h5py.File(str(self.checkpoint_path), "a") as hf:
-                        hf.create_dataset('data', data=sub_img)
-                        hf.create_dataset('label', data=sub_label)
-
-            with h5py.File(self.checkpoint_path, 'r') as hf:
-                self.img = np.array(hf.get('data'))
-                self.label = np.array(hf.get('label'))
+            self.trans = transforms.Compose(
+                [transforms.ToTensor(), transforms.Resize(args.patch_size), transforms.Normalize([0.5], [0.5])])
+            total_img = list(Path(path).glob("*.bmp"))
+            total_img.extend(Path(path).glob("*.jpg"))
+            total_img.extend(Path(path).glob("*.png"))
+            total_img.extend(Path(path).glob("*.tif"))
+            total_img.sort(key=lambda x: int(x.stem))
+            self.img = total_img
 
     def __len__(self):
         return len(self.img)
 
     def __getitem__(self, idx):
-        img = self.img[idx]
-        label = self.label[idx]
-        if self.transform:
-            img = self.trans(img)
+        if args.do_patch:
+            img = self.img[idx]
+            label = self.label[idx]
+            if self.transform:
+                img = self.trans(img)
+                label = self.trans(label)
+            return img, label
+        else:
+            padding = args.patch_size - args.label_size
+            label = cv2.imread(str(self.img[idx]), cv2.IMREAD_GRAYSCALE)
+            img = np.pad(label,((padding//2,padding-padding//2),(padding//2,padding-padding//2)),"constant",constant_values=(0,0))
             label = self.trans(label)
-        return img, label
+            img = self.trans(img)
+            return img,label
 
     def patch_img(self, img_path):
         mylogger.info(f"训练|开始切分训练集")
@@ -96,9 +120,10 @@ class imgDataset(Dataset):
                 hf.create_dataset('data', data=sub_img)
                 hf.create_dataset('label', data=sub_label)
 
-    def _patch(self, total_img):
-        sub_img = []
-        sub_label = []
+    @staticmethod
+    def _patch(total_img):
+        # sub_img = []
+        # sub_label = []
         if args.is_train:
             padding = (args.patch_size - args.label_size) // 2
             for index in range(len(total_img)):
@@ -111,31 +136,27 @@ class imgDataset(Dataset):
                         label = label.reshape([args.label_size, args.label_size, 1])
                         patch = patch_img[x:x + args.patch_size, y:y + args.patch_size]
                         patch = patch.reshape([args.patch_size, args.patch_size, 1])
-                        sub_img.append(patch)
-                        sub_label.append(label)
-            sub_img = np.asarray(sub_img)
-            sub_label = np.asarray(sub_label)
-            yield sub_img, sub_label
+                        # sub_img.append(patch)
+                        # sub_label.append(label)
+                        yield patch, label
+            # yield sub_img, sub_label
         else:
             for index in range(len(total_img)):
                 label = cv2.imread(str(total_img[index]), cv2.IMREAD_GRAYSCALE)
                 padding = args.patch_size - args.label_size
                 # 将源图像做填充
-                img = np.pad(label, ((padding // 2, padding - padding // 2), (padding // 2, padding - padding // 2)),
+                img = np.pad(label,
+                             ((padding // 2, padding - padding // 2), (padding // 2, padding - padding // 2)),
                              "constant", constant_values=(127, 127))
-                label = np.reshape(img, [img.shape[0], img.shape[1], 1])
+                img = np.reshape(img, [img.shape[0], img.shape[1], 1])
                 label = np.reshape(label, [label.shape[0], label.shape[1], 1])
 
-                sub_img.append(img)
-                sub_label.append(label)
-            sub_img = np.array(sub_img)
-            sub_label = np.array(sub_label)
-            yield sub_img, sub_label
-
-        #
-        # with h5py.File(str(self.checkpoint_path), "w") as hf:
-        #     hf.create_dataset('data', data=sub_img)
-        #     hf.create_dataset('label', data=sub_label)
+                # sub_img.append(img)
+                # sub_label.append(label)
+                # sub_img = np.array(sub_img)
+                # sub_label = np.array(sub_label)
+                yield img, label
+            # yield sub_img, sub_label
 
 
 def gradient(x):
@@ -151,8 +172,8 @@ def train(G, D, ir_dataloader, vi_dataloader):
     epoch_G_loss = []
     epoch_D_loss = []
     if args.is_train:
-        G_optimizer = torch.optim.Adam(G.parameters())
-        D_optimizer = torch.optim.Adam(D.parameters())
+        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.learning_rate)
+        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.learning_rate)
         for epoch in tqdm(range(args.epochs)):
             mylogger.info(f"训练|开始训练第{epoch + 1}个epoch,一次epoch包含{len(ir_dataloader)}个batch")
             for batch, ((ir_img, ir_label), (vi_img, vi_label)) in enumerate(zip(ir_dataloader, vi_dataloader)):
@@ -258,9 +279,11 @@ if __name__ == '__main__':
     parser.add_argument("--label_size", "-l", type=int, default=152)
     parser.add_argument("--stride_size", "-s", type=int, default=60)
     parser.add_argument("--epochs", "-e", type=int, default=30)
+    parser.add_argument("--do_patch", "-dp", type=bool, default=False)
     parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint")
     parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
     parser.add_argument("--vis_log", "-vl", type=str, default="./log")
+    parser.add_argument("--learning_rate", "-lr", type=float, default=1e-4)
     parser.add_argument("--log_interval", "-li", type=int, default=5)
     parser.add_argument("--override_data", "-od", type=bool, default=False, help="whether to override dataset")
     parser.add_argument("--generator_interval", "-gi", type=int, default=2, help="interval between update G")

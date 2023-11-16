@@ -31,6 +31,10 @@ from torchsummary import summary
 #     label = np.array(hf.get('label'))
 # print(img[0].shape)
 # print(label[0].shape)
+# cv2.imshow("img",img[1000])
+# cv2.imshow("label",label[1000])
+# cv2.waitKey(0)
+
 # label[0] = label[0].reshape(1, 152, 152)
 from model import U_GAN
 from model import Discriminator
@@ -44,22 +48,22 @@ import torch.nn.functional as F
 from torchsummary import summary
 
 import torch.nn as nn
-from pathlib import Path
-path = "../Train_ir"
-
-ir_img = list(Path(path).glob("*.bmp"))
-ir_img.extend(Path(path).glob("*.jpg"))
-ir_img.extend(Path(path).glob("*.png"))
-ir_img.extend(Path(path).glob("*.tif"))
-ir_img.sort(key=lambda x: int(x.stem))
-print(ir_img)
-
-vi_img = list(Path(path).glob("*.bmp"))
-vi_img.extend(Path(path).glob("*.jpg"))
-vi_img.extend(Path(path).glob("*.png"))
-vi_img.extend(Path(path).glob("*.tif"))
-vi_img.sort(key=lambda x: int(x.stem))
-print(vi_img)
+# from pathlib import Path
+# path = "../Train_ir"
+#
+# ir_img = list(Path(path).glob("*.bmp"))
+# ir_img.extend(Path(path).glob("*.jpg"))
+# ir_img.extend(Path(path).glob("*.png"))
+# ir_img.extend(Path(path).glob("*.tif"))
+# ir_img.sort(key=lambda x: int(x.stem))
+# print(ir_img)
+#
+# vi_img = list(Path(path).glob("*.bmp"))
+# vi_img.extend(Path(path).glob("*.jpg"))
+# vi_img.extend(Path(path).glob("*.png"))
+# vi_img.extend(Path(path).glob("*.tif"))
+# vi_img.sort(key=lambda x: int(x.stem))
+# print(vi_img)
 #
 #
 #

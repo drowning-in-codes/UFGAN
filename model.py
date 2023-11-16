@@ -26,7 +26,8 @@ class DDcGAN(nn.Module):
         self.dec_layer_2 = self.conv_bn_lr(240, 128, 3, 1, 1)
         self.dec_layer_3 = self.conv_bn_lr(128, 64, 3, 1, 1)
         self.dec_layer_4 = self.conv_bn_lr(64, 32, 3, 1, 1)
-        self.dec_layer_5 = self.conv_bn_lr(32, 1, 3, last=False)
+        self.dec_layer_5 = self.conv_bn_lr(32, 1, 3, last=True)
+        self.apply(self.weight_init)
 
     def forward(self, x):
         fused_feature = self.encoder(x)
@@ -75,6 +76,8 @@ class FusionModel(nn.Module):
         self.conv3 = self.conv_bn_lr(128, 64, 3, 1, 1)
         self.conv4 = self.conv_bn_lr(64, 32, 3, 1, 1)
         self.conv5 = self.conv_bn_lr(32, 1, 1, 0, 1, last=True)
+        self.apply(self.weight_init)
+
 
     def forward(self, x):
         out = self.conv1(x)
@@ -97,6 +100,7 @@ class FusionModel(nn.Module):
             cbl.append(nn.LeakyReLU())
         return cbl
 
+
     def weight_init(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
@@ -106,12 +110,7 @@ class FusionModel(nn.Module):
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m,nn.ReLU):
-            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in',nonlinearity='leaky_relu')
-        elif isinstance(m, nn.LeakyReLU):
-            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
-        elif isinstance(m,nn.Tanh):
-            nn.init.xavier_normal_(m.weight.data)
+
 
 class U_GAN(nn.Module):
     def __init__(self):
@@ -180,12 +179,6 @@ class U_GAN(nn.Module):
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m,nn.ReLU):
-            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in',nonlinearity='leaky_relu')
-        elif isinstance(m, nn.LeakyReLU):
-            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
-        elif isinstance(m,nn.Tanh):
-            nn.init.xavier_normal_(m.weight.data)
 
     def forward(self, x):
         out = self.conv_bn_relu_1(x)
@@ -229,6 +222,7 @@ class U_GAN(nn.Module):
         out = torch.cat([out, concat_1], dim=1)
         out = self.conv_bn_relu_9(out)
         out = self.conv(out)
+        out = nn.Tanh()(out)
         # print(f"U-net output shape:{out.shape}")
         return out
 
@@ -241,6 +235,7 @@ class Discriminator(nn.Module):
         self.conv_bn_lr_3 = self.conv_bn_lr(64, 128, 0, 2)
         self.conv_bn_lr_4 = self.conv_bn_lr(128, 256, 0, 2)
         self.gfcn = self.gap_fcn(256)
+        self.apply(self.weight_init)
         # self.linear = nn.Linear() For various input,use FCN or GAP or SSP instead
         # 之前的网络训练时固定输入的大小,现在可以为任意大小,所以需要改为FCN或者GAP或者SSP
         # SPPnet
@@ -284,6 +279,8 @@ class Discriminator(nn.Module):
     #         return SPP
 
 
+
+
     def weight_init(self, m):
         if isinstance(m, nn.Linear):
             nn.init.xavier_normal_(m.weight.data)
@@ -293,12 +290,6 @@ class Discriminator(nn.Module):
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight.data, 1.0)
             nn.init.constant_(m.bias.data, 0.0)
-        elif isinstance(m,nn.ReLU):
-            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in',nonlinearity='leaky_relu')
-        elif isinstance(m, nn.LeakyReLU):
-            nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
-        elif isinstance(m,nn.Tanh):
-            nn.init.xavier_normal_(m.weight.data)
 
     def SPPNet(self, x, levels=None):
         if levels is None:
