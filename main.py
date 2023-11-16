@@ -31,12 +31,12 @@ class imgDataset(Dataset):
         self.checkpoint_path = None
         self.is_train = is_train
         self.transform = transform
-        (Path(args.checkpoint_dir) / path).mkdir(exist_ok=True)
+        (Path(args.data_dir) / path).mkdir(exist_ok=True)
         if args.do_patch:
             if self.transform:
                 self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
             if self.is_train:
-                self.checkpoint_path = str(Path(args.checkpoint_dir) / path / "train.h5")
+                self.checkpoint_path = str(Path(args.data_dir) / path / "train.h5")
                 if not args.override_data and Path(self.checkpoint_path).exists():
                     mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
                 else:
@@ -47,7 +47,7 @@ class imgDataset(Dataset):
                     self.label = np.array(hf.get('label'))
             else:
                 self.img_path = path
-                self.checkpoint_path = Path(args.checkpoint_dir) / path / "test.h5"
+                self.checkpoint_path = str(Path(args.data_dir) / path / "test.h5")
                 if not args.override_data and Path(self.checkpoint_path).exists():
                     mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
                 else:
@@ -63,7 +63,7 @@ class imgDataset(Dataset):
                         pbar.set_description(f"测试|第{idx + 1}张图片做切分")
                         sub_img, sub_label = patch_data
                         if idx == 0:
-                            with h5py.File(str(self.checkpoint_path), "w",chunks=True,maxshape=(None,)) as hf:
+                            with h5py.File(self.checkpoint_path, "w",chunks=True,maxshape=(None,)) as hf:
                                 hf.create_dataset('data', data=sub_img,
                                                   maxshape=(None, sub_img.shape[1], sub_img.shape[2], sub_img.shape[3]),
                                                   chunks=True)
@@ -71,7 +71,7 @@ class imgDataset(Dataset):
                                 hf.create_dataset('label', data=sub_label,maxshape=(None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
                                                   chunks=True)
                         else:
-                            with h5py.File(str(self.checkpoint_path), "a") as hf:
+                            with h5py.File(self.checkpoint_path, "a") as hf:
                                 img = hf.get("data")
                                 label = hf.get("label")
                                 img.resize(img.shape[0] + sub_img.shape[0], axis=0)
@@ -131,11 +131,11 @@ class imgDataset(Dataset):
                 """
                 先创建数据集
                 """
-                with h5py.File(str(self.checkpoint_path), "w") as hf:
+                with h5py.File(self.checkpoint_path, "w") as hf:
                     hf.create_dataset('data', data=sub_img, maxshape=(None,sub_img.shape[1],sub_img.shape[2],sub_img.shape[3]),chunks=True)
                     hf.create_dataset('label', data=sub_label, maxshape=(None,sub_label.shape[1],sub_label.shape[2],sub_label.shape[3]),chunks=True)
             else:
-                with h5py.File(str(self.checkpoint_path), "a") as hf:
+                with h5py.File(self.checkpoint_path, "a") as hf:
                     img = hf.get("data")
                     label = hf.get("label")
                     img.resize(img.shape[0]+sub_img.shape[0],axis=0)
@@ -249,8 +249,8 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 writer.add_scalar("train/G_loss", mean_G_loss, epoch + 1)
                 writer.add_scalar("train/D_loss", mean_D_loss, epoch + 1)
 
-                torch.save(G.state_dict(), f"{args.checkpoint_dir}/G_{epoch + 1}.pth")
-                torch.save(D.state_dict(), f"{args.checkpoint_dir}/D_{epoch + 1}.pth")
+                torch.save(G.state_dict(), f"{args.checkpoint_dir}/{G.__class__.name}/G_{epoch + 1}.pth")
+                torch.save(D.state_dict(), f"{args.checkpoint_dir}/{D.__class__.name}/D_{epoch + 1}.pth")
     else:
         D.eval()
         G.eval()
@@ -305,9 +305,10 @@ if __name__ == '__main__':
     parser.add_argument("--stride_size", "-s", type=int, default=60)
     parser.add_argument("--epochs", "-e", type=int, default=30)
     parser.add_argument("--do_patch", "-dp", type=bool, default=False)
-    parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint")
+    parser.add_argument("--data_dir", "-d", type=str, default="./h5data",help="save path for h5 data")
+    parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint",help="save path for torch model")
     parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
-    parser.add_argument("--vis_log", "-vl", type=str, default="./log")
+    parser.add_argument("--vis_log", "-vl", type=str, default="./log",help="path for tensorboard visualization")
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-4)
     parser.add_argument("--log_interval", "-li", type=int, default=5)
     parser.add_argument("--override_data", "-od", type=bool, default=False, help="whether to override dataset")
