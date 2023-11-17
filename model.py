@@ -70,6 +70,8 @@ class DDcGAN(nn.Module):
 class FusionModel(nn.Module):
     def __init__(self, original=False):
         super().__init__()
+        if original:
+            self.__class__.__name__ = "FusionModel_original"
         channel = 256
         self.conv = nn.ModuleList(
             [self.conv_bn_lr(in_channel, out_channel, 5 if original else 3, 0 if original else 1, 1, last=True if out_channel == 1 else False) for

@@ -26,9 +26,28 @@ import h5py
 from PIL import Image
 import imageio
 import matplotlib.pylab as plt
-import numpy as np
-import cv2
-print(("训练" if True else "测试") + f"|第张图片做切分")
+# import numpy as np
+# import cv2
+# img = torch.rand([255,255,1])*255
+# img = np.array(img,dtype=np.uint8)
+# print(img)
+#
+img = cv2.imread("../Train_ir/00000.png",cv2.IMREAD_GRAYSCALE)
+print(img.shape)
+cv2.imshow("img",img)
+cv2.waitKey()
+# cv2.imwrite("./1.tif",img)
+# img = cv2.imread("./17.tif",cv2.IMREAD_ANYDEPTH)
+# print(img)
+# cv2.imshow("img",img)
+# img = img.astype(np.uint8)
+# cv2.imshow("img",img)
+# cv2.waitKey()
+# cv2.imwrite("./17.bmp",img)
+# img = cv2.imread("../Test_result/1.bmp")
+# print(img.shape)
+# cv2.imshow("img",img)
+# cv2.waitKey()
 # # 新建numpy数组，注意np.zero()创建的数据类型为float64
 
 # plt.imshow(img,cmap="gray",vmin=0,vmax=255)
@@ -42,6 +61,22 @@ print(("训练" if True else "测试") + f"|第张图片做切分")
 # img = img.numpy()
 # plt.imshow(img,cmap="gray",vmin=0,vmax=255)
 # plt.show()
+# import numpy as np
+# import cv2
+# img=cv2.imread("../Test_result/1.bmp",cv2.IMREAD_GRAYSCALE)
+# x=cv2.resize(img,(568, 760))
+
+# y=np.resize(img,(568, 760))
+# print(x.shape)
+#
+# print(y.shape)
+# cv2.imshow("a",x)
+# cv2.waitKey(0)
+# cv2.imshow("b",y)
+# cv2.waitKey(0)
+
+
+
 # label[0] = label[0].reshape(1, 152, 152)
 from model import U_GAN
 from model import Discriminator

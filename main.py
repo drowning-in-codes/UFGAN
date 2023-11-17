@@ -10,7 +10,7 @@ from torchvision import transforms
 import cv2
 import h5py
 from tqdm import tqdm
-from model import U_GAN, Discriminator,FusionModel
+from model import U_GAN, Discriminator, FusionModel
 from logger import getLogger
 from torch.utils.tensorboard import SummaryWriter
 from loss import gradient_loss, l2_norm, mse_loss, ssim_loss
@@ -31,12 +31,12 @@ class imgDataset(Dataset):
         self.data_dir = None
         self.is_train = is_train
         self.transform = transform
-        (Path(args.data_dir) / path).mkdir(exist_ok=True)
+        (Path(args.data_dir) / path).mkdir(exist_ok=True, parents=True)
         if args.do_patch:
             if self.transform:
                 self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
             if self.is_train:
-                self.data_dir = str(Path(args.data_dir) / path / "train.h5")
+                self.data_dir = str(Path(args.data_dir) / path / f"train_{args.label_size}.h5")
                 if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
                 else:
@@ -47,7 +47,7 @@ class imgDataset(Dataset):
                     self.label = np.array(hf.get('label'))
             else:
                 self.img_path = path
-                self.data_dir = str(Path(args.data_dir) / path / "test.h5")
+                self.data_dir = str(Path(args.data_dir) / path / f"test_{args.label_size}.h5")
                 if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
                 else:
@@ -63,12 +63,13 @@ class imgDataset(Dataset):
                         pbar.set_description(f"测试|第{idx + 1}张图片做切分")
                         sub_img, sub_label = patch_data
                         if idx == 0:
-                            with h5py.File(self.data_dir, "w",chunks=True,maxshape=(None,)) as hf:
+                            with h5py.File(self.data_dir, "w", chunks=True, maxshape=(None,)) as hf:
                                 hf.create_dataset('data', data=sub_img,
                                                   maxshape=(None, sub_img.shape[1], sub_img.shape[2], sub_img.shape[3]),
                                                   chunks=True)
 
-                                hf.create_dataset('label', data=sub_label,maxshape=(None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
+                                hf.create_dataset('label', data=sub_label, maxshape=(
+                                None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
                                                   chunks=True)
                         else:
                             with h5py.File(self.data_dir, "a") as hf:
@@ -84,9 +85,10 @@ class imgDataset(Dataset):
                     self.label = np.array(hf.get('label'))
         else:
             self.img_trans = transforms.Compose(
-                [transforms.ToTensor(), transforms.Resize((args.patch_size,args.patch_size)), transforms.Normalize([0.5], [0.5])])
+                [transforms.ToTensor(), transforms.Resize((args.patch_size, args.patch_size),antialias=True),
+                 transforms.Normalize([0.5], [0.5])])
             self.label_trans = transforms.Compose(
-                [transforms.ToTensor(), transforms.Resize((args.label_size, args.label_size)),
+                [transforms.ToTensor(), transforms.Resize((args.label_size, args.label_size),antialias=True),
                  transforms.Normalize([0.5], [0.5])])
             total_img = list(Path(path).glob("*.bmp"))
             total_img.extend(Path(path).glob("*.jpg"))
@@ -135,14 +137,18 @@ class imgDataset(Dataset):
                 先创建数据集
                 """
                 with h5py.File(self.data_dir, "w") as hf:
-                    hf.create_dataset('data', data=sub_img, maxshape=(None,sub_img.shape[1],sub_img.shape[2],sub_img.shape[3]),chunks=True)
-                    hf.create_dataset('label', data=sub_label, maxshape=(None,sub_label.shape[1],sub_label.shape[2],sub_label.shape[3]),chunks=True)
+                    hf.create_dataset('data', data=sub_img,
+                                      maxshape=(None, sub_img.shape[1], sub_img.shape[2], sub_img.shape[3]),
+                                      chunks=True)
+                    hf.create_dataset('label', data=sub_label,
+                                      maxshape=(None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
+                                      chunks=True)
             else:
                 with h5py.File(self.data_dir, "a") as hf:
                     img = hf.get("data")
                     label = hf.get("label")
-                    img.resize(img.shape[0]+sub_img.shape[0],axis=0)
-                    label.resize(label.shape[0]+sub_label.shape[0],axis=0)
+                    img.resize(img.shape[0] + sub_img.shape[0], axis=0)
+                    label.resize(label.shape[0] + sub_label.shape[0], axis=0)
                     img[-sub_img.shape[0]:] = sub_img
                     label[-sub_label.shape[0]:] = sub_label
 
@@ -249,11 +255,18 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 mean_G_loss = np.mean(epoch_G_loss)
                 mean_D_loss = np.mean(epoch_D_loss)
                 mylogger.info(f"训练|第{epoch + 1}个epoch|G_loss:{mean_G_loss:>5f}|D_loss:{mean_D_loss:>5f}")
-                writer.add_scalar("train/G_loss", mean_G_loss, epoch + 1)
-                writer.add_scalar("train/D_loss", mean_D_loss, epoch + 1)
-
-                torch.save(G.state_dict(), f"{args.checkpoint_dir}/{G.__class__.__name__}/G_{epoch + 1}.pth")
-                torch.save(D.state_dict(), f"{args.checkpoint_dir}/{D.__class__.__name__}/D_{epoch + 1}.pth")
+                if args.do_patch:
+                    writer.add_scalar(f"train/{G.__class__.__name__}/patch/G_loss", mean_G_loss, epoch + 1)
+                    writer.add_scalar(f"train/{D.__class__.__name__}/patch/D_loss", mean_D_loss, epoch + 1)
+                    dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath("train_on_patch")
+                    dir_path.mkdir(exist_ok=True, parents=True)
+                    dir_path = str(dir_path)
+                else:
+                    writer.add_scalar(f"train/{G.__class__.__name__}/G_loss", mean_G_loss, epoch + 1)
+                    writer.add_scalar(f"train/{D.__class__.__name__}/D_loss", mean_D_loss, epoch + 1)
+                    dir_path = f"{args.checkpoint_dir}/{G.__class__.__name__}"
+                torch.save(G.state_dict(), f"{dir_path}/G_{epoch + 1}.pth")
+                torch.save(D.state_dict(), f"{dir_path}/D_{epoch + 1}.pth")
     else:
         D.eval()
         G.eval()
@@ -307,11 +320,11 @@ if __name__ == '__main__':
     parser.add_argument("--label_size", "-l", type=int, default=152)
     parser.add_argument("--stride_size", "-s", type=int, default=60)
     parser.add_argument("--epochs", "-e", type=int, default=30)
-    parser.add_argument("--do_patch", "-dp", type=bool, default=True)
-    parser.add_argument("--data_dir", "-d", type=str, default="./h5data",help="save path for h5 data")
-    parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint",help="save path for torch model")
+    parser.add_argument("--do_patch", "-dp", type=bool, default=False)
+    parser.add_argument("--data_dir", "-d", type=str, default="./h5data", help="save path for h5 data")
+    parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint", help="save path for torch model")
     parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
-    parser.add_argument("--vis_log", "-vl", type=str, default="./log",help="path for tensorboard visualization")
+    parser.add_argument("--vis_log", "-vl", type=str, default="./log", help="path for tensorboard visualization")
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-4)
     parser.add_argument("--log_interval", "-li", type=int, default=5)
     parser.add_argument("--override_data", "-od", type=bool, default=False, help="whether to override dataset")
@@ -322,16 +335,16 @@ if __name__ == '__main__':
     # tensorboard可视化
     Path(args.vis_log).mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=args.vis_log)
-
-    ir_dataset = imgDataset(path="./Train_ir")
-    vi_dataset = imgDataset(path="./Train_vi")
     G = U_GAN().to(device)
     D = Discriminator().to(device)
+    ir_dataset = imgDataset(path="./Train_ir")
+    vi_dataset = imgDataset(path="./Train_vi")
+
     ir_dataloader = DataLoader(ir_dataset, batch_size=args.batch_size, shuffle=True)
     vi_dataloader = DataLoader(vi_dataset, batch_size=args.batch_size, shuffle=True)
     assert len(ir_dataloader) == len(vi_dataloader), "红外图像和可见光图像数量不一致"
     mylogger = getLogger(f"{G.__class__.__name__}", log_dir=args.log_dir)
     # 模型保存文件夹创建
-    Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").mkdir(exist_ok=True,parents=True)
-    Path(args.checkpoint_dir).joinpath(f"{D.__class__.__name__}").mkdir(exist_ok=True,parents=True)
+    Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").mkdir(exist_ok=True, parents=True)
+    Path(args.checkpoint_dir).joinpath(f"{D.__class__.__name__}").mkdir(exist_ok=True, parents=True)
     train(G, D, ir_dataloader, vi_dataloader)

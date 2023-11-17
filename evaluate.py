@@ -10,41 +10,57 @@ import skimage.measure as measure
 
 
 def img_generator(path):
-    for file in Path(path).iterdir():
+    total_img = list(Path(path).glob("*.bmp"))
+    total_img.extend(list(Path(path).glob("*.jpg")))
+    total_img.extend(list(Path(path).glob("*.tif")))
+    total_img.extend(list(Path(path).glob("*.png")))
+    total_img.sort(key=lambda x: int(x.stem))
+    for file in total_img:
         if file.is_file():
-            img = cv2.imread(str(file))
-            filename = file.stem
-            # img =
+            img = cv2.imread(str(file), cv2.IMREAD_GRAYSCALE)
+            img = img.reshape(img.shape[0], img.shape[1], 1)
             yield img
 
 
-def qualitative_analysis(source_1_path, source_2_path, fused_path):
+def qualitative_analysis(source_1_path, source_2_path, fused_path,limit=None):
     """
     :param source_1_path: near focus
     """
-    total_img = len(glob.glob(fused_path + "/*.jpg"))
-    print(f"定性分析:一共{total_img}张融合图片")
+    img = glob.glob(fused_path + "/*.jpg")
+    img.extend(glob.glob(fused_path + "/*.bmp"))
+    img.extend(glob.glob(fused_path + "/*.tif"))
+    img.extend(glob.glob(fused_path + "/*.png"))
+
+    img.sort(key=lambda x: Path(x).stem)
+    total_img = len(img)
+    model_path, rescale_way = fused_path.split("/")[-2:]
+    print(f"定性分析:|{model_path}|{rescale_way}一共{total_img}张融合图片")
+    if limit is None:
+        rows = total_img
+    else:
+        rows = min(limit, total_img)
     source_1 = img_generator(source_1_path)
     source_2 = img_generator(source_2_path)
     fused = img_generator(fused_path)
-    rows = total_img
-    fig, axes = plt.subplots(rows, 3, figsize=(10, 10), tight_layout=True)
+    fig, axes = plt.subplots(rows, 3, figsize=(5, 5))
     for i in range(rows):
         s1 = next(source_1)
         s2 = next(source_2)
         f = next(fused)
-        axes[i, 0].title.set_text(f"infrared image")
-        axes[i, 1].title.set_text(f"visible image")
-        axes[i, 2].title.set_text(f"fused")
+        if i == 0:
+            axes[i, 0].title.set_text(f"infrared img")
+            axes[i, 1].title.set_text(f"visible img")
+            axes[i, 2].title.set_text(f"fused")
         axes[i, 0].axis("off")
         axes[i, 1].axis("off")
         axes[i, 2].axis("off")
-        axes[i, 0].imshow(s1)
-        axes[i, 1].imshow(s2)
-        axes[i, 2].imshow(f)
+        axes[i, 0].imshow(s1,cmap="gray",vmin=0,vmax=255)
+        axes[i, 1].imshow(s2,cmap="gray",vmin=0,vmax=255)
+        axes[i, 2].imshow(f,cmap="gray",vmin=0,vmax=255)
     # plt.subplots_adjust(left=0.125, bottom=0.1, right=0.9, top=0.9, wspace=0.1, hspace=0.35)
-    Path("figs").mkdir(parents=True, exist_ok=True)
-    plt.savefig('figs/qualitative_analysis.jpg')
+    savepath = f"figs/{model_path}/{rescale_way}"
+    Path(savepath).mkdir(exist_ok=True, parents=True)
+    plt.savefig(f'{savepath}/qualitative_analysis.jpg')
     plt.show()
 
 
@@ -57,16 +73,26 @@ def img_ssim(img1, img2):
     return np.mean(ssims)
 
 
-def quantitative_analysis(source_1_path, source_2_path, fused_path):
+def quantitative_analysis(source_1_path, source_2_path, fused_path,limit=None):
     """
     SSIM,PSNR,MI,MSE,EN
     """
-    total_img = len(glob.glob(fused_path + "/*.jpg"))
-    print(f"定量分析:一共{total_img}张融合图片")
+    img = glob.glob(fused_path + "/*.jpg")
+    img.extend(glob.glob(fused_path + "/*.bmp"))
+    img.extend(glob.glob(fused_path + "/*.tif"))
+    img.extend(glob.glob(fused_path + "/*.png"))
+
+    img.sort(key=lambda x: Path(x).stem)
+    total_img = len(img)
+    model_path,rescale_way = fused_path.split("/")[-2:]
+    print(f"定量分析|{model_path}|{rescale_way}:一共{total_img}张融合图片")
     source_1 = img_generator(source_1_path)
     source_2 = img_generator(source_2_path)
     fused = img_generator(fused_path)
-    rows = total_img
+    if limit is None:
+        rows = total_img
+    else:
+        rows = min(limit,total_img)
     all_ssim = []
     all_psnr = []
     all_mi = []
@@ -126,10 +152,14 @@ def quantitative_analysis(source_1_path, source_2_path, fused_path):
     markers = ["8", "o", "s", "^", "D", "4", "1", "2"]
     # plt.subplots_adjust(left=0.125, bottom=0.1, right=0.9, top=0.9, wspace=0.1, hspace=0.35)
     for index, [key, value] in enumerate(all_metrics.items()):
-        axes[index].plot([i for i in range(1, len(value))] + ["mean"], value, marker=markers[index], label=key)
+        axes[index].set_xticks([])
+        axes[index].bar([str(i) for i in range(1,len(value))] + ["mean"], value)
         axes[index].set_title(key)
-        axes[index].legend()
+        # axes[index].legend()
     plt.suptitle("quantitative analysis")
+    savepath = f"figs/{model_path}/{rescale_way}"
+    Path(savepath).mkdir(exist_ok=True,parents=True)
+    plt.savefig(f'{savepath}/quantitative_analysis.jpg')
     plt.show()
 
 
@@ -184,19 +214,14 @@ def img_sd(img):
 
 
 if __name__ == '__main__':
-    # Path("./figs").mkdir(parents=True, exist_ok=True)
-    # img = Image.open("./Test_far/1.jpg")
-    # print(np.array(img).shape)
-    # plt.imshow(img,cmap="gray")
-    # plt.show()
-    # img = cv2.imread("./Test_far/1.jpg")
-    # print(img.shape)
-    # plt.imshow(img,cmap="gray")
-    # plt.show()
-    # qualitative_analysis("./Test_near", "./Test_far", "./result")
-    # quantitative_analysis("./Test_near", "./Test_far", "./result")
-
-    img = cv2.imread("./Test_ir/1.bmp")
-    print(img.shape)
-    cv2.imshow("img", img)
-    cv2.waitKey()
+    model_name = "U_GAN"
+    assert Path(f"./Test_result/{model_name}").exists() ,f"没有{model_name}模型的测试结果"
+    total_rescale_way = list([i for i in os.listdir(f"./Test_result/{model_name}") if os.path.isdir(f"./Test_result/{model_name}/{i}") and not i.startswith(".")])
+    # rescale_way = "norm_-1_1_resize"
+    fused_paths = [f"./Test_result/{model_name}/{rescale_way}" for rescale_way in total_rescale_way]
+    ir_path ="./Test_ir"
+    vi_path = "./Test_vi"
+    assert Path(ir_path).exists(), f"没有{ir_path}文件夹"
+    assert Path(vi_path).exists(), f"没有{vi_path}文件夹"
+    [qualitative_analysis(ir_path, vi_path, fused_path,limit=5) for fused_path in fused_paths]
+    [quantitative_analysis(ir_path, vi_path, fused_path) for fused_path in fused_paths]
