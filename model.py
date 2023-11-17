@@ -26,7 +26,7 @@ class DDcGAN(nn.Module):
         self.dec_layer_2 = self.conv_bn_lr(240, 128, 3, 1, 1)
         self.dec_layer_3 = self.conv_bn_lr(128, 64, 3, 1, 1)
         self.dec_layer_4 = self.conv_bn_lr(64, 32, 3, 1, 1)
-        self.dec_layer_5 = self.conv_bn_lr(32, 1, 3, last=True)
+        self.dec_layer_5 = self.conv_bn_lr(32, 1, 3, padding=1,last=True)
         self.apply(self.weight_init)
 
     def forward(self, x):
@@ -65,6 +65,16 @@ class DDcGAN(nn.Module):
         else:
             cbl.append(nn.LeakyReLU())
         return cbl
+
+    def weight_init(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_normal_(m.weight.data)
+            nn.init.constant_(m.bias.data, 0.0)
+        elif isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+            nn.init.kaiming_normal_(m.weight.data)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight.data, 1.0)
+            nn.init.constant_(m.bias.data, 0.0)
 
 
 class FusionModel(nn.Module):

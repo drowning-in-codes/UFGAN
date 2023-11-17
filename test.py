@@ -5,8 +5,8 @@ from pathlib import Path
 from model import U_GAN, FusionModel, DDcGAN
 import cv2
 import numpy as np
-
-
+import argparse
+from utils import str2bool
 def test_loop(rescale_way, model, ir_img, vi_img, padding=8, do_patch=False,limit=50):
     norm_neg = False
     resize_flag = False
@@ -18,7 +18,7 @@ def test_loop(rescale_way, model, ir_img, vi_img, padding=8, do_patch=False,limi
         resize_flag = True
 
     if do_patch:
-        save_path = f"./Test_result/{model.__class__.__name__}/patch/{rescale_way}"
+        save_path = f"./Test_result/{model.__class__.__name__}/train_on_patch/{rescale_way}"
     else:
         save_path = f"./Test_result/{model.__class__.__name__}/{rescale_way}"
 
@@ -26,7 +26,7 @@ def test_loop(rescale_way, model, ir_img, vi_img, padding=8, do_patch=False,limi
     limit = min(limit,len(ir_img))
     print(f"一共测试{limit}张照片")
     Path(save_path).mkdir(exist_ok=True, parents=True)
-    for i in range(len(limit)):
+    for i in range(limit):
         ir_ig = cv2.imread(str(ir_img[i]), cv2.IMREAD_GRAYSCALE)
         vi_ig = cv2.imread(str(vi_img[i]), cv2.IMREAD_GRAYSCALE)
         if norm_neg:
@@ -58,22 +58,46 @@ def test_loop(rescale_way, model, ir_img, vi_img, padding=8, do_patch=False,limi
     print(f"结束测试|{'_'.join(save_path.split('/')[2:])}")
 
 if __name__ == '__main__':
-    padding = 8
-    do_patch = False
-    epoch_size = 30
+    parser = argparse.ArgumentParser(description='generate fused image for test')
+    parser.add_argument('--do_patch',"-dp", type=str2bool, default=True,help='use model trained on patch or not')
+    parser.add_argument('--epoch_size',"-es", type=int, default=30, help='epoch size of trained model')
+    parser.add_argument("--model_name","-m",type=str,default="U_GAN",help="model name")
+    parser.add_argument("--checkpoint_path","-c",type=str,default="./checkpoint",help="location of checkpoint")
+
+    args = parser.parse_args()
+
+    do_patch = args.do_patch
+    epoch_size = args.epoch_size
 
     ir_path = "./Test_ir"
     vi_path = "./Test_vi"
 
     rescale_ways = [f"norm_{num}_1_{way}" for num in [-1,0] for way in ["resize","padding"]]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = U_GAN().to(device)
-    checkpoint_path = f"./checkpoint/{model.__class__.__name__}/G_{epoch_size}.pth"
-    assert Path(checkpoint_path).exists(), f"没有{model.__class__.__name__}/G_{epoch_size}.pth模型的训练结果"
+
+    if args.model_name == "U_GAN":
+        model = U_GAN().to(device)
+        padding = 8
+    elif args.model_name == "FusionModel":
+        model = FusionModel().to(device)
+        padding = 0
+    elif args.model_name == "DDcGAN":
+        model = DDcGAN().to(device)
+        padding = 0
+    else:
+        model = FusionModel(True).to(device)
+        padding = 20
+
+    if do_patch:
+        checkpoint_path = f"{args.checkpoint_path}/{model.__class__.__name__}/train_on_patch/G_{epoch_size}.pth"
+    else:
+        checkpoint_path = f"{args.checkpoint_path}/{model.__class__.__name__}/G_{epoch_size}.pth"
+    assert Path(checkpoint_path).exists(), f"没有{checkpoint_path}模型的训练结果"
     assert Path(ir_path).exists(), f"没有{ir_path}文件夹"
     assert Path(vi_path).exists(), f"没有{vi_path}文件夹"
 
     model.load_state_dict(torch.load(checkpoint_path))
+    model.eval()
     ir_img = list(Path(ir_path).glob("*.bmp"))
     ir_img.extend(list(Path(ir_path).glob("*.tif")))
     ir_img.extend(list(Path(ir_path).glob("*.jpg")))
@@ -87,5 +111,4 @@ if __name__ == '__main__':
     vi_img.extend(list(Path(vi_path).glob("*.png")))
 
     vi_img.sort(key=lambda x: int(x.stem))
-
     [test_loop(rescale_way, model, ir_img, vi_img, padding, do_patch) for rescale_way in rescale_ways]

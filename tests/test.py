@@ -32,10 +32,11 @@ import matplotlib.pylab as plt
 # img = np.array(img,dtype=np.uint8)
 # print(img)
 #
-img = cv2.imread("../Train_ir/00000.png",cv2.IMREAD_GRAYSCALE)
-print(img.shape)
-cv2.imshow("img",img)
-cv2.waitKey()
+from model import DDcGAN,FusionModel
+from torchsummary import summary
+m = DDcGAN().to(torch.device("cuda"))
+print(summary(m,input_size=(2,154,152),device="cuda"))
+
 # cv2.imwrite("./1.tif",img)
 # img = cv2.imread("./17.tif",cv2.IMREAD_ANYDEPTH)
 # print(img)
@@ -49,7 +50,7 @@ cv2.waitKey()
 # cv2.imshow("img",img)
 # cv2.waitKey()
 # # 新建numpy数组，注意np.zero()创建的数据类型为float64
-
+print(f"{3.41421424:<.2f}")
 # plt.imshow(img,cmap="gray",vmin=0,vmax=255)
 # plt.show()
 # c = Image.fromarray(np.array(a))

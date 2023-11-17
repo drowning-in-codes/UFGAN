@@ -10,11 +10,11 @@ from torchvision import transforms
 import cv2
 import h5py
 from tqdm import tqdm
-from model import U_GAN, Discriminator, FusionModel
+from model import U_GAN, Discriminator, FusionModel,DDcGAN
 from logger import getLogger
 from torch.utils.tensorboard import SummaryWriter
 from loss import gradient_loss, l2_norm, mse_loss, ssim_loss
-
+from utils import str2bool
 
 #
 # with h5py.File(str(self.checkpoint_path), "w") as hf:
@@ -33,13 +33,15 @@ class imgDataset(Dataset):
         self.transform = transform
         (Path(args.data_dir) / path).mkdir(exist_ok=True, parents=True)
         if args.do_patch:
+            (Path(args.data_dir) / "patch" /path).mkdir(exist_ok=True, parents=True)
             if self.transform:
                 self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
             if self.is_train:
-                self.data_dir = str(Path(args.data_dir) / path / f"train_{args.label_size}.h5")
+                self.data_dir = str(Path(args.data_dir) / "patch" / path / f"train_{args.label_size}.h5")
                 if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
                 else:
+
                     self.patch_img(path)
 
                 with h5py.File(self.data_dir, 'r') as hf:
@@ -47,7 +49,7 @@ class imgDataset(Dataset):
                     self.label = np.array(hf.get('label'))
             else:
                 self.img_path = path
-                self.data_dir = str(Path(args.data_dir) / path / f"test_{args.label_size}.h5")
+                self.data_dir = str(Path(args.data_dir) / "patch" / path / f"test_{args.label_size}.h5")
                 if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"测试|已经存在测试集的h5文件,直接读取")
                 else:
@@ -258,15 +260,19 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 if args.do_patch:
                     writer.add_scalar(f"train/{G.__class__.__name__}/patch/G_loss", mean_G_loss, epoch + 1)
                     writer.add_scalar(f"train/{D.__class__.__name__}/patch/D_loss", mean_D_loss, epoch + 1)
-                    dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath("train_on_patch")
-                    dir_path.mkdir(exist_ok=True, parents=True)
-                    dir_path = str(dir_path)
+                    G_dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath("train_on_patch")
+                    D_dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath("train_on_patch")
+                    G_dir_path.mkdir(exist_ok=True, parents=True)
+                    D_dir_path.mkdir(exist_ok=True, parents=True)
+                    G_dir_path = str(G_dir_path)
+                    D_dir_path = str(D_dir_path)
                 else:
                     writer.add_scalar(f"train/{G.__class__.__name__}/G_loss", mean_G_loss, epoch + 1)
                     writer.add_scalar(f"train/{D.__class__.__name__}/D_loss", mean_D_loss, epoch + 1)
-                    dir_path = f"{args.checkpoint_dir}/{G.__class__.__name__}"
-                torch.save(G.state_dict(), f"{dir_path}/G_{epoch + 1}.pth")
-                torch.save(D.state_dict(), f"{dir_path}/D_{epoch + 1}.pth")
+                    G_dir_path = f"{args.checkpoint_dir}/{G.__class__.__name__}"
+                    D_dir_path = f"{args.checkpoint_dir}/{D.__class__.__name__}"
+                torch.save(G.state_dict(), f"{G_dir_path}/G_{epoch + 1}.pth")
+                torch.save(D.state_dict(), f"{D_dir_path}/D_{epoch + 1}.pth")
     else:
         D.eval()
         G.eval()
@@ -299,7 +305,7 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
                     G_ssim_loss = ssim_loss(G_out, ir_label) + 5 * ssim_loss(G_out, vi_label)
 
-                    G_loss = G_adversarial_loss + 100 * G_content_loss
+                    G_loss = G_adversarial_loss + 100 * G_content_loss + 250*G_ssim_loss
 
                     epoch_G_loss.append(G_loss.item())
                     epoch_D_loss.append(D_loss.item())
@@ -314,20 +320,21 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='FusionGAN for pytorch.')
-    parser.add_argument("--is_train", "-t", type=bool, default=True)
+    parser.add_argument("--is_train", "-t", type=str2bool, default=True)
     parser.add_argument("--batch_size", "-b", type=int, default=32)
+    parser.add_argument("--model_name", "-m", type=str, default="U_GAN")
     parser.add_argument("--patch_size", "-p", type=int, default=160)
     parser.add_argument("--label_size", "-l", type=int, default=152)
     parser.add_argument("--stride_size", "-s", type=int, default=60)
     parser.add_argument("--epochs", "-e", type=int, default=30)
-    parser.add_argument("--do_patch", "-dp", type=bool, default=False)
+    parser.add_argument("--do_patch", "-dp", type=str2bool, default=True)
     parser.add_argument("--data_dir", "-d", type=str, default="./h5data", help="save path for h5 data")
     parser.add_argument("--checkpoint_dir", "-c", type=str, default="./checkpoint", help="save path for torch model")
     parser.add_argument("--log_dir", "-ld", type=str, default="./log.txt")
     parser.add_argument("--vis_log", "-vl", type=str, default="./log", help="path for tensorboard visualization")
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-4)
     parser.add_argument("--log_interval", "-li", type=int, default=5)
-    parser.add_argument("--override_data", "-od", type=bool, default=False, help="whether to override dataset")
+    parser.add_argument("--override_data", "-od", type=str2bool, default=False, help="whether to override dataset")
     parser.add_argument("--generator_interval", "-gi", type=int, default=2, help="interval between update G")
     args = parser.parse_args()
     # 设置运行设备
@@ -335,15 +342,23 @@ if __name__ == '__main__':
     # tensorboard可视化
     Path(args.vis_log).mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=args.vis_log)
-    G = U_GAN().to(device)
+    if args.model_name == "U_GAN":
+        G = U_GAN().to(device)
+    elif args.model_name == "FusionModel":
+        G = FusionModel().to(device)
+    elif args.model_name == "DDcGAN":
+        G = DDcGAN().to(device)
+    else:
+        G = FusionModel(True).to(device)
     D = Discriminator().to(device)
+    mylogger = getLogger(f"{G.__class__.__name__}", log_dir=args.log_dir)
+
     ir_dataset = imgDataset(path="./Train_ir")
     vi_dataset = imgDataset(path="./Train_vi")
 
     ir_dataloader = DataLoader(ir_dataset, batch_size=args.batch_size, shuffle=True)
     vi_dataloader = DataLoader(vi_dataset, batch_size=args.batch_size, shuffle=True)
     assert len(ir_dataloader) == len(vi_dataloader), "红外图像和可见光图像数量不一致"
-    mylogger = getLogger(f"{G.__class__.__name__}", log_dir=args.log_dir)
     # 模型保存文件夹创建
     Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").mkdir(exist_ok=True, parents=True)
     Path(args.checkpoint_dir).joinpath(f"{D.__class__.__name__}").mkdir(exist_ok=True, parents=True)
