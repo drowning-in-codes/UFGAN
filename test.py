@@ -1,6 +1,4 @@
 import torch
-from torch import nn
-import torchvision
 from pathlib import Path
 from model import U_GAN, FusionModel, DDcGAN
 import cv2
