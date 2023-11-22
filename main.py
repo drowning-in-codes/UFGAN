@@ -250,9 +250,7 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
                     style_transfer_loss = vgg_loss(vi_label,ir_label,G_out)
                     # 生成器损失
-                    print(f"G_adversarial_loss:{G_adversarial_loss.item():>5f}|G_content_loss:{G_content_loss.item():>5f}|G_ssim_loss:{G_ssim_loss.item():>5f}|style_transfer_loss:{style_transfer_loss.item():>5f}")
-                    G_loss = G_adversarial_loss + 100 * G_content_loss + 250 * G_ssim_loss + 100 * style_transfer_loss
-
+                    G_loss = G_adversarial_loss + 100 * G_content_loss + 300 * G_ssim_loss + 100 * style_transfer_loss
                     epoch_G_loss.append(G_loss.item())
                     G_loss.backward()
                     G_optimizer.step()
@@ -313,7 +311,7 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
                     style_transfer_loss = vgg_loss(vi_label,ir_label,G_out)
 
-                    G_loss = G_adversarial_loss + 100 * G_content_loss + 250*G_ssim_loss + 100*style_transfer_loss
+                    G_loss = G_adversarial_loss + 100 * G_content_loss + 300*G_ssim_loss + 100*style_transfer_loss
 
                     epoch_G_loss.append(G_loss.item())
                     epoch_D_loss.append(D_loss.item())

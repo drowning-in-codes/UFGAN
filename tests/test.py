@@ -34,8 +34,9 @@ import matplotlib.pylab as plt
 #
 from model import DDcGAN,FusionModel
 from torchsummary import summary
-a = torch.ones(1,1)
+a = torch.ones(1)
 print(a.requires_grad)
+print(type(a.item()))
 # cv2.imwrite("./1.tif",img)
 # img = cv2.imread("./17.tif",cv2.IMREAD_ANYDEPTH)
 # print(img)
@@ -49,7 +50,6 @@ print(a.requires_grad)
 # cv2.imshow("img",img)
 # cv2.waitKey()
 # # 新建numpy数组，注意np.zero()创建的数据类型为float64
-print(f"{3.41421424:<.2f}")
 # plt.imshow(img,cmap="gray",vmin=0,vmax=255)
 # plt.show()
 # c = Image.fromarray(np.array(a))

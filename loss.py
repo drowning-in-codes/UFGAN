@@ -1,8 +1,9 @@
 import torch
 from torch import nn
-from skimage import metrics
 import torch.nn.functional as F
 from torchvision import models
+from torchmetrics import image
+from torchvision.models import VGG19_Weights
 
 
 def mse_loss(input, target):
@@ -20,7 +21,7 @@ def vgg_loss(source_1, source_2, target):
     :return:
     """
     style_layers, content_layers = [0, 5, 10, 19, 28], [25]
-    pretrained_net = models.vgg19(pretrained=True)
+    pretrained_net = models.vgg19(weights=VGG19_Weights.DEFAULT).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     net = nn.Sequential(
         *[
             pretrained_net.features[i]
@@ -86,7 +87,9 @@ def compute_loss(X, contents_Y_hat, styles_Y_hat, contents_Y, styles_Y_gram):
 
 
 def ssim_loss(input, target):
-    return 1 - metrics.structural_similarity(input, target, data_range=1, multichannel=True)
+    ssim = image.StructuralSimilarityIndexMeasure(data_range=(-1, 1)).to(
+        torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    return 1 - ssim(input, target)
 
 
 def gradient(img, ):
