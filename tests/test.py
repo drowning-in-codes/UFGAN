@@ -34,9 +34,8 @@ import matplotlib.pylab as plt
 #
 from model import DDcGAN,FusionModel
 from torchsummary import summary
-m = DDcGAN().to(torch.device("cuda"))
-print(summary(m,input_size=(2,154,152),device="cuda"))
-
+a = torch.ones(1,1)
+print(a.requires_grad)
 # cv2.imwrite("./1.tif",img)
 # img = cv2.imread("./17.tif",cv2.IMREAD_ANYDEPTH)
 # print(img)

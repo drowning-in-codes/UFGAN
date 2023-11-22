@@ -13,7 +13,7 @@ from tqdm import tqdm
 from model import U_GAN, Discriminator, FusionModel,DDcGAN
 from logger import getLogger
 from torch.utils.tensorboard import SummaryWriter
-from loss import gradient_loss, l2_norm, mse_loss, ssim_loss
+from loss import gradient_loss, l2_norm, mse_loss, ssim_loss,vgg_loss
 from utils import str2bool
 
 #
@@ -23,7 +23,7 @@ from utils import str2bool
 
 
 class imgDataset(Dataset):
-    global args
+    global args后py
     global mylogger
 
     def __init__(self, is_train=True, transform=True, path="./Train_ir"):
@@ -245,8 +245,14 @@ def train(G, D, ir_dataloader, vi_dataloader):
                     #     torch.square(D_out - torch.rand([batch_size, 1], device=device) * 0.5 + 0.7))
                     c = torch.rand([batch_size, 1], device=device) * 0.5 + 0.7
                     G_adversarial_loss = mse_loss(D_out, c)
+
+                    G_ssim_loss = ssim_loss(G_out, ir_label) + 5 * ssim_loss(G_out, vi_label)
+
+                    style_transfer_loss = vgg_loss(vi_label,ir_label,G_out)
                     # 生成器损失
-                    G_loss = G_adversarial_loss + 100 * G_content_loss
+                    print(f"G_adversarial_loss:{G_adversarial_loss.item():>5f}|G_content_loss:{G_content_loss.item():>5f}|G_ssim_loss:{G_ssim_loss.item():>5f}|style_transfer_loss:{style_transfer_loss.item():>5f}")
+                    G_loss = G_adversarial_loss + 100 * G_content_loss + 250 * G_ssim_loss + 100 * style_transfer_loss
+
                     epoch_G_loss.append(G_loss.item())
                     G_loss.backward()
                     G_optimizer.step()
@@ -305,7 +311,9 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
                     G_ssim_loss = ssim_loss(G_out, ir_label) + 5 * ssim_loss(G_out, vi_label)
 
-                    G_loss = G_adversarial_loss + 100 * G_content_loss + 250*G_ssim_loss
+                    style_transfer_loss = vgg_loss(vi_label,ir_label,G_out)
+
+                    G_loss = G_adversarial_loss + 100 * G_content_loss + 250*G_ssim_loss + 100*style_transfer_loss
 
                     epoch_G_loss.append(G_loss.item())
                     epoch_D_loss.append(D_loss.item())
