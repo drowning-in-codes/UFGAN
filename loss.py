@@ -28,6 +28,12 @@ def vgg_loss(source_1, source_2, target):
             for i in range(max(content_layers + style_layers) + 1)
         ]
     )
+    if source_1.shape[1] == 1:
+        source_1 = torch.cat((source_1,source_1,source_1),axis=1)
+    if source_2.shape[1] == 1:
+        source_2 = torch.cat((source_2,source_2,source_2),axis=1)
+    if target.shape[1] == 1:
+        target = torch.cat((target,target,target),axis=1)
     source_1_content, _ = extract_features(source_1, content_layers, style_layers, net=net)
     _, source_2_styles = extract_features(source_2, content_layers, style_layers, net=net)
     target_content,target_styles = extract_features(target, content_layers, style_layers, net=net)
