@@ -10,11 +10,12 @@ from torchvision import transforms
 import cv2
 import h5py
 from tqdm import tqdm
-from model import U_GAN, Discriminator, FusionModel,DDcGAN
+from model import U_GAN, Discriminator, FusionModel, DDcGAN
 from logger import getLogger
 from torch.utils.tensorboard import SummaryWriter
-from loss import gradient_loss, l2_norm, mse_loss, ssim_loss,vgg_loss
+from loss import gradient_loss, l2_norm, mse_loss, ssim_loss, vgg_loss
 from utils import str2bool
+
 
 #
 # with h5py.File(str(self.checkpoint_path), "w") as hf:
@@ -23,7 +24,7 @@ from utils import str2bool
 
 
 class imgDataset(Dataset):
-    global args后py
+    global args
     global mylogger
 
     def __init__(self, is_train=True, transform=True, path="./Train_ir"):
@@ -31,9 +32,8 @@ class imgDataset(Dataset):
         self.data_dir = None
         self.is_train = is_train
         self.transform = transform
-        (Path(args.data_dir) / path).mkdir(exist_ok=True, parents=True)
         if args.do_patch:
-            (Path(args.data_dir) / "patch" /path).mkdir(exist_ok=True, parents=True)
+            (Path(args.data_dir) / "patch" / path).mkdir(exist_ok=True, parents=True)
             if self.transform:
                 self.trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
             if self.is_train:
@@ -41,9 +41,7 @@ class imgDataset(Dataset):
                 if not args.override_data and Path(self.data_dir).exists():
                     mylogger.info(f"训练|已经存在训练集的h5文件,直接读取")
                 else:
-
                     self.patch_img(path)
-
                 with h5py.File(self.data_dir, 'r') as hf:
                     self.img = np.array(hf.get('data'))
                     self.label = np.array(hf.get('label'))
@@ -71,7 +69,7 @@ class imgDataset(Dataset):
                                                   chunks=True)
 
                                 hf.create_dataset('label', data=sub_label, maxshape=(
-                                None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
+                                    None, sub_label.shape[1], sub_label.shape[2], sub_label.shape[3]),
                                                   chunks=True)
                         else:
                             with h5py.File(self.data_dir, "a") as hf:
@@ -86,11 +84,12 @@ class imgDataset(Dataset):
                     self.img = np.array(hf.get('data'))
                     self.label = np.array(hf.get('label'))
         else:
+            (Path(args.data_dir) / path).mkdir(exist_ok=True, parents=True)
             self.img_trans = transforms.Compose(
-                [transforms.ToTensor(), transforms.Resize((args.patch_size, args.patch_size),antialias=True),
+                [transforms.ToTensor(), transforms.Resize((args.patch_size, args.patch_size), antialias=True),
                  transforms.Normalize([0.5], [0.5])])
             self.label_trans = transforms.Compose(
-                [transforms.ToTensor(), transforms.Resize((args.label_size, args.label_size),antialias=True),
+                [transforms.ToTensor(), transforms.Resize((args.label_size, args.label_size), antialias=True),
                  transforms.Normalize([0.5], [0.5])])
             total_img = list(Path(path).glob("*.bmp"))
             total_img.extend(Path(path).glob("*.jpg"))
@@ -248,7 +247,7 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
                     G_ssim_loss = ssim_loss(G_out, ir_label) + 5 * ssim_loss(G_out, vi_label)
 
-                    style_transfer_loss = vgg_loss(vi_label,ir_label,G_out)
+                    style_transfer_loss = vgg_loss(vi_label, ir_label, G_out)
                     # 生成器损失
                     G_loss = G_adversarial_loss + 100 * G_content_loss + 300 * G_ssim_loss + 100 * style_transfer_loss
                     epoch_G_loss.append(G_loss.item())
@@ -264,8 +263,10 @@ def train(G, D, ir_dataloader, vi_dataloader):
                 if args.do_patch:
                     writer.add_scalar(f"train/{G.__class__.__name__}/patch/G_loss", mean_G_loss, epoch + 1)
                     writer.add_scalar(f"train/{D.__class__.__name__}/patch/D_loss", mean_D_loss, epoch + 1)
-                    G_dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath("train_on_patch")
-                    D_dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath("train_on_patch")
+                    G_dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath(
+                        "train_on_patch")
+                    D_dir_path = Path(args.checkpoint_dir).joinpath(f"{G.__class__.__name__}").joinpath(
+                        "train_on_patch")
                     G_dir_path.mkdir(exist_ok=True, parents=True)
                     D_dir_path.mkdir(exist_ok=True, parents=True)
                     G_dir_path = str(G_dir_path)
@@ -309,9 +310,9 @@ def train(G, D, ir_dataloader, vi_dataloader):
 
                     G_ssim_loss = ssim_loss(G_out, ir_label) + 5 * ssim_loss(G_out, vi_label)
 
-                    style_transfer_loss = vgg_loss(vi_label,ir_label,G_out)
+                    style_transfer_loss = vgg_loss(vi_label, ir_label, G_out)
 
-                    G_loss = G_adversarial_loss + 100 * G_content_loss + 300*G_ssim_loss + 100*style_transfer_loss
+                    G_loss = G_adversarial_loss + 100 * G_content_loss + 300 * G_ssim_loss + 100 * style_transfer_loss
 
                     epoch_G_loss.append(G_loss.item())
                     epoch_D_loss.append(D_loss.item())
