@@ -1,4 +1,4 @@
-name: Pylint
+name: ForLint
 
 on: [push]
 
@@ -9,6 +9,11 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
     steps:
+    - name: format with black
+      uses: jpetrucciani/black-check@23.11.0
+      with:
+        # File or directory to run black on
+        path: .
     - uses: actions/checkout@v3
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
@@ -18,13 +23,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-      # You may pin to the exact commit or the version.
-      # uses: jpetrucciani/black-check@d67cebf5183542e6b451c9340e0c0a55145ac242
-    - name: format with black
-      uses: jpetrucciani/black-check@23.11.0
-      with:
-        # File or directory to run black on
-        path: .
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')
