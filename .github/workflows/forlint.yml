@@ -1,0 +1,39 @@
+name: ForLint
+
+on: [push]
+
+jobs:
+  format_and_lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+    steps:
+    - name: format with black
+      uses: jpetrucciani/black-check@23.11.0
+      with:
+        # File or directory to run black on
+        path: .
+    - name: Lint
+      uses: programmingwithalex/pylinter@v1.4.3
+      with:
+        # directory to run linting on
+        python-root: # optional, default is .
+        # flake8 flags
+        flake8-flags: # optional, default is 
+        # mypy flags
+        mypy-flags: # optional, default is 
+        # optional exit on isort errors
+        fail-on-isort: # optional
+        # skip flake8 checks
+        skip-flake8: # optional
+        # skip mypy checks
+        skip-mypy: # optional
+        # skip isort checks
+        skip-isort: # optional
+        # list of directories and/or files to ignore for mypy. separate with spaces
+        mypy-ignore-dirs-files: # optional, default is 
+        # requirements filepath for project for mypy to prevent library stub missing errors
+        requirements-file: # optional, default is 
+              
+         
