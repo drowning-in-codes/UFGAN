@@ -4,6 +4,7 @@
 - 代码清晰易懂: 项目代码结构合理,注释详细,便于理解和修改。
 - 容易上手: 提供详细的使用说明和示例,即使是初学者也能快速上手。
 - 学习图像融合模型: 该项目适合作为学习图像融合模型的入门项目,可以帮助你了解模型的原理和实现。
+
 功能特性
 - 支持红外光和可见光图像的融合
 - 采用 Unet 模型进行图像融合
@@ -26,11 +27,12 @@ This project focuses on using the Unet model to fuse infrared and visible light 
 - Clear and understandable code: The project code has a reasonable structure and detailed comments, making it easy to understand and modify.
 - Easy to use: Detailed usage instructions and examples are provided, allowing even beginners to get started quickly.
 - Learn image fusion models: This project is suitable as an introductory project for learning image fusion models, helping you understand the principles and implementation of the models.
-## Key Features
-Support for fusion of infrared and visible light images
-Adopt the Unet model for image fusion
-Provide visualization of results and evaluation metrics
-Support running on both CPU and GPU
+  
+Key Features
+- Support for fusion of infrared and visible light images
+- Adopt the Unet model for image fusion
+- Provide visualization of results and evaluation metrics
+- Support running on both CPU and GPU
 ## Installation and Usage
 Please refer to the project README file for detailed installation and usage instructions.
 ```
