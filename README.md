@@ -19,6 +19,13 @@ pip install -r requirements.txt
 ```
 ## 贡献和反馈
 如果你对该项目有任何建议或反馈,欢迎提交 Issue 或 Pull Request。我会及时响应和处理。
+![image](https://github.com/user-attachments/assets/694b6bf7-b6ef-4f02-a60e-6b323d91a678)
+![image](https://github.com/user-attachments/assets/791acea3-8e12-4322-93fa-899e753ce9a2)
+![image](https://github.com/user-attachments/assets/c65f1b99-e33f-4fdd-8d36-ad8e8552f803)
+![image](https://github.com/user-attachments/assets/3d48dba8-2aab-4d9d-9526-7ede6fad1ea4)
+![image](https://github.com/user-attachments/assets/ce0d758d-e588-41b8-a7bd-c66b6bab5297)
+![image](https://github.com/user-attachments/assets/700d3366-844a-4703-acc3-2867d630f5fc)
+![image](https://github.com/user-attachments/assets/79eb7605-3475-49e3-b36a-e25f533ba9ea)
 
 # UFGAN
 GAN for Image Fusion which is inspired by FusionGAN and U-net
